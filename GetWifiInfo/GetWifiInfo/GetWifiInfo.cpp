@@ -6,6 +6,8 @@
 #include <wlanapi.h>
 #include <objbase.h>
 #include <wtypes.h>
+#include <iostream>
+#include <string>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,8 +29,25 @@ static VOID WINAPI WlanNotification(WLAN_NOTIFICATION_DATA *wlanNotifData, VOID 
 }
 
 
-int main()
+int main(int argc, char* argv[])
 {
+	bool doScan;
+	if (argc != 2) {
+		std::cerr << "Argument must be scan=yes or scan=no" << std::endl;
+		return 1;
+	}
+	if (std::string(argv[1]) == "scan=yes") {
+		doScan = true;
+	}
+	else if (std::string(argv[1]) == "scan=no") {
+		doScan = false;
+	}
+	else {
+		std::cerr << "Argument must be scan=yes or scan=no" << std::endl;
+		return 1;
+	}
+
+
 	HANDLE hClient = NULL;
 	DWORD dwResult = 0;
 	DWORD dwMaxClient = 2;
@@ -38,19 +57,23 @@ int main()
 	PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
 	PWLAN_INTERFACE_INFO pIfInfo = NULL;
 
+
+
 	dwResult = WlanOpenHandle(dwMaxClient, NULL, &dwCurVersion, &hClient);
 	dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
 
 	pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[0];
 
-	dwResult = WlanRegisterNotification(hClient, WLAN_NOTIFICATION_SOURCE_ACM, TRUE, &WlanNotification, NULL, 0, NULL);
-	DWORD ignore = WlanScan(hClient, &pIfInfo->InterfaceGuid, NULL, NULL, NULL);
+	if (doScan) {
+		dwResult = WlanRegisterNotification(hClient, WLAN_NOTIFICATION_SOURCE_ACM, TRUE, &WlanNotification, NULL, 0, NULL);
+		DWORD ignore = WlanScan(hClient, &pIfInfo->InterfaceGuid, NULL, NULL, NULL);
 
-	while (!scanDone)
-	{
+		while (!scanDone)
+		{
+			Sleep(50);
+		}
 		Sleep(50);
 	}
-	Sleep(50);
 
 	dwResult = WlanGetNetworkBssList(hClient,
 		&pIfInfo->InterfaceGuid,
@@ -62,7 +85,7 @@ int main()
 		if (entry.dot11Ssid.uSSIDLength == 0)
 			wprintf(L"");
 		else {
-			for (int k = 0; k < entry.dot11Ssid.uSSIDLength; k++) {
+			for (unsigned int k = 0; k < entry.dot11Ssid.uSSIDLength; k++) {
 				wprintf(L"%c", (int)entry.dot11Ssid.ucSSID[k]);
 			}			
 		}
