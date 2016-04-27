@@ -37,33 +37,22 @@ def get_single_reading(count):
     return reading
     
     
-def add_summary(reading):
-    reading['summary'] = {}
-    for (network_key, network_data) in reading['network_data'].iteritems():
-        p = float(len(network_data))/reading['count']
-        mu = np.mean(network_data)
-        if len(network_data)>5:                
-            sigma = np.std(network_data)
-        else:
-            sigma = 3
-        reading['summary'][network_key] = [p, mu, sigma]
-
-
-def get_reading_custom(obs_id, location, obs_time, time_offset):
+def get_reading_custom(location, level, x, y, obs_time, time_offset):
     """
     Args:
-        obs_id:
-        location:
+
+
+
         obs_time:
         offset:
     """
     data = []
-    result = subprocess.check_output(["GetWifiInfo"])
+    result = subprocess.check_output(["GetWifiInfo","scan=yes"])
     lines = result.split('\r\n')
     for line in lines:
         if len(line)>0:
             cols = line.split(',')
-            data.append([obs_id, location, obs_time, time_offset, cols[0], cols[1], cols[2]])
+            data.append([location, level, x, y, obs_time, time_offset, cols[0], cols[1], cols[2]])
     return data
 
     
@@ -104,42 +93,61 @@ def get_reading_netsh(obs_id, location, obs_time, reset=False):
         
     return data
     
-def make_readings(filename, obs_id, location, N):
+def make_readings(filename, location, level, x, y, N):
 
     fd = open(filename, "ab")
     csvwriter = csv.writer(fd)
 
     start_time = datetime.datetime.now()
     for i in range(N):
+        print(str(i) + " of " + str(N))
         elapsed = (datetime.datetime.now() - start_time)
         dbprint("working on " + str(i+1) + " of " + str(N) + ": " + str(elapsed.total_seconds()) + "s")    
-        data = get_reading_custom(obs_id, location, start_time, elapsed.total_seconds())
+        data = get_reading_custom(location, level, x, y, start_time, elapsed.total_seconds())
         dbprint(data)
         for row in data:
             csvwriter.writerow(row)
     
     fd.close()
     
-def make_summary():
-    fd = open('readings2.csv','r')
+   
+        
+#==============================================================================
+#     
+#==============================================================================
+
+def add_summary(reading):
+    reading['summary'] = {}
+    for (network_key, network_data) in reading['network_data'].iteritems():
+        p = float(len(network_data))/reading['count']
+        mu = np.mean(network_data)
+        if len(network_data)>5:                
+            sigma = np.std(network_data)
+        else:
+            sigma = 3
+        reading['summary'][network_key] = [p, mu, sigma]         
+        
+def make_summary(fname):
+    fd = open(fname,'r')
     lines = fd.readlines()
     fd.close()
     
     locations = {}
     networks = {}     
-    
+#      0         1         2   3                   4            5     6      7        8
+#Greenstone,Lower Level,850.0,361.0,2016-04-25 10:27:07.861000,0.0,AlwaysOn,-64,2c-e6-cc-08-18-2c    
     for line in lines:
         cols = line.split(',')
-        mac = cols[6].translate(None, '\n\r')
-        ssid = cols[4]
-        strength = float(cols[5])
-        location = cols[1]
-        time_and_offset = cols[2] + "," + cols[3]
+        mac = cols[8].translate(None, '\n\r')
+        ssid = cols[6]
+        strength = float(cols[7])
+        location = str(cols[1])+":"+str(cols[2])+":"+str(cols[3])
+        time_and_offset = cols[4] + "," + cols[5]
         if location not in locations.keys():
             locations[location] = {'count':0, 'network_data':{}, 'times':[]}
         
         if mac not in networks.keys():
-            networks[cols[6]] = ssid
+            networks[mac] = ssid
             
         if mac not in locations[location]['network_data'].keys():
             locations[location]['network_data'][mac] = []
@@ -162,7 +170,7 @@ def make_summary():
                 sigma = 3
             location['summary'][network_key] = [p, mu, sigma]
             
-    return locations
+    return (networks, locations)
     
 """
 Single obs
@@ -200,32 +208,49 @@ def get_diff(obs, location):
             score -= w3 * obs_stats[0] * abs(-90-obs_stats[1])
             dbprint("not in fingerprint: ")
             dbprint(obs_stats)
-            
+    dbprint(score)        
+    dbprint(weighting)
     return score/weighting         
     
     
-def analyse_fingerprint_data(locations):
-    fd = open('readings2.csv','r')
+def analyse_fingerprint_data(locations, fname):
+    """ Iterates over a large set of readings to see how well they are matched 
+    to their known positons
+    """
+    fd = open(fname,'r')
     lines = fd.readlines()
     fd.close()
+    time_count = 1
     for (i, line) in enumerate(lines):
-        line = line.split(',')
+        #if i>400: break
+        cols = line.split(',')        
         prev_line = lines[i-1].split(',')
+        
+        mac = cols[8].translate(None, '\n\r')
+        #ssid = cols[6]
+        strength = float(cols[7])
+        location = str(prev_line[1])+":"+str(prev_line[2])+":"+str(prev_line[3])
+        
         if i==0:
-            reading = {'count':1, 'network_data':{}}            
-        elif line[3]!=prev_line[3]:
+            reading = {'count':0, 'network_data':{}}
+        elif cols[5]!=prev_line[5]:
+            time_count+=1
+            reading['count']+=1
+            
+        if time_count>=2:
+            time_count=1
             # start of new reading
             add_summary(reading)
-            print("*******************************")
+            #print("*******************************")
             #dbprint("processing " + str(reading))
-            print(prev_line[1] + " matched to " + find_best_match(reading["summary"], locations))
-            reading = {'count':1, 'network_data':{}}
+            print(location + " matched to " + find_best_match(reading["summary"], locations))
+            reading = {'count':0, 'network_data':{}}
         
-        mac = line[6].translate(None, "\n\r")
-        strength = float(line[5])
         if mac not in reading['network_data'].keys():
             reading['network_data'][mac] = []
-        reading['network_data'][mac].append(strength)    
+        reading['network_data'][mac].append(strength)  
+        
+        
             
 def find_best_match(obs, locations):
     scores = []
@@ -237,22 +262,25 @@ def find_best_match(obs, locations):
         dbprint(score)
         scores.append(score)
         keys.append(location_key)
-        
+    
+#    for row in zip(keys, scores):
+#        print(row)
+
     return keys[np.argmax(scores)]
         
     
 
 if __name__ == "__main__":
+    fname = 'greenstone1.csv'
+    #make_readings('greenstone1.csv', "Greenstone", "Lower Level", 100.0, 23, 20)
+    (networks, locations) = make_summary('greenstone1.csv');
+    #reading = get_single_reading(1)
     
-    #make_readings('readings2.csv', "00008", "lounge entrance", 60)
-    locations = make_summary();
-    reading = get_single_reading(1)
+    #obs = reading["summary"]
+    #match = find_best_match(obs, locations)
+    #print(match)
     
-    obs = reading["summary"]
-    match = find_best_match(obs, locations)
-    print(match)
-    
-    #analyse_fingerprint_data(locations)
+    #analyse_fingerprint_data(locations, fname)
     
     
 
