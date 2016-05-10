@@ -13,7 +13,7 @@ def add_points(ax, this_id, location_summaries):
         x = s["x"]
         y = s["y"]
         level = s["level"]
-        if level==0:        
+        if level==1:        
             if s["stats"].has_key(this_id):
                 p = s["stats"][this_id][0]
                 mu = s["stats"][this_id][1]
