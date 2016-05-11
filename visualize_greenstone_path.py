@@ -42,6 +42,6 @@ for (i, point) in enumerate(all_points):
         
     
     plt.draw()
-    time.sleep(0.25)
+    time.sleep(0.01)
     
 plt.show()

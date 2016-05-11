@@ -2,6 +2,7 @@ import os
 import datetime
 import math
 import numpy as np
+import copy
 
 
 
@@ -141,7 +142,7 @@ Single obs
 Multiple obs
 
 """   
-def get_diff(obs, location):
+def get_diff(obs, location, valid_macs):
     score = 0
     w1 = 1
     w2 = 1
@@ -159,7 +160,7 @@ def get_diff(obs, location):
             score -= w2 * loc_stats[0] * abs(-90-loc_stats[1])
             
     for obs_mac_key, obs_stats in obs.iteritems():
-        if obs_mac_key not in location.keys():
+        if obs_mac_key in valid_macs and obs_mac_key not in location.keys():
             score -= w3 * obs_stats[0] * abs(-90-obs_stats[1])
             # in obs but not fingerprint
 
@@ -221,7 +222,7 @@ def translate_mac(i, macs_from, macs_to):
     
 """
 """
-def get_paths(folder, date_range, macs_tab, macs_phone):
+def get_paths(folder, date_range, macs_summaries, macs_path):
     allfiles = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
     all_points = []
     for filename in allfiles:
@@ -242,42 +243,131 @@ def get_paths(folder, date_range, macs_tab, macs_phone):
                     if parts[0]=="OFFSET":                        
                         this_point = {}
                         this_point["time"] = date + datetime.timedelta(milliseconds=float(parts[1]))
+                        this_point["offset"] = float(parts[1])
                         this_point["stats"] = {}
                         all_points.append(this_point)
                     elif is_int:
-                        new_mac_num = translate_mac(mac_num, macs_phone, macs_tab)
+                        new_mac_num = translate_mac(mac_num, macs_path, macs_summaries)
                         this_point["stats"][new_mac_num] = [1, float(parts[1]), 0]
                 
     return all_points
     
-def process_path(all_points, location_summaries):
-    old_score = - 1000
+    
+""" Takes a path from:
+        get_paths
+    and adds location information to each point.
+"""    
+def process_path(all_points, location_summaries, valid_macs):
+    px_per_meter = 4.20 # Greenstone
+    walking_pace = 2.0 # FAST: 7.6km/h
+    augmented_points = copy.deepcopy(all_points)
+    old_score = - 1001
+    old_ind = 0
+    old_t = 0
     old_x = 0
     old_y = 0
     old_level = 0
-    age = 0
-    for point in all_points:
-        diffs = [get_diff(point["stats"], location_summary["stats"]) for location_summary in location_summaries]
+    connection_points = [[[530, 320],[570, 660]],
+                        [[1020,425],[1100,690]]]
+    old_close_conn = 0
+
+    for (i, point) in enumerate(augmented_points):
+        print ("")
+        print("currently at {:},{:},{:} with score {:}".format(old_level, old_x, old_y, old_score))
+        diffs = [get_diff(point["stats"], location_summary["stats"], valid_macs) for location_summary in location_summaries]
         ind = np.argmax(diffs)
-        score = np.max(diffs)
-        if score>(old_score+1.5-age*0.5):
-            age = 0
+        score = np.max(diffs)        
+        print("new best score = {:3.0f} at {:},{:},{:}".format(score, location_summaries[ind]["x"], location_summaries[ind]["y"], location_summaries[ind]["level"]))
+        print("time elapsed {:}".format((point["offset"] - old_t)/1000))
+        update = False
+        if old_score<=-1000: # first point
+            update = True
+        elif ind==old_ind:
+            update = False
+            print("same place")
+        else:
+            if (i==8):
+                stop = "here"
+            x = location_summaries[ind]["x"]
+            y = location_summaries[ind]["y"]
+            level = location_summaries[ind]["level"]
+            if level==old_level:
+                dist_px = math.sqrt((x-old_x)**2 + (y-old_y)**2)
+            else:
+                x0 = connection_points[old_close_conn][old_level][0]
+                y0 = connection_points[old_close_conn][old_level][1]
+                x1 = connection_points[old_close_conn][level][0]
+                y1 = connection_points[old_close_conn][level][1]                
+                dist_px = math.sqrt((x0-old_x)**2 + (y0-old_y)**2) + math.sqrt((x1-x)**2 + (y1-y)**2)
+            
+            # Could one have got this far? Deduct the 20 since we could be wrong about our current location
+            time_to_there = (((dist_px / px_per_meter)-20) / walking_pace)
+            print("time to get there: {:}".format(time_to_there))
+            if time_to_there*1000 < (point["offset"] - old_t):
+                update=True
+                print("close enough")
+                
+        if update:
+            old_ind = ind
+            old_t = point["offset"]
             old_score = score
             old_x = location_summaries[ind]["x"]
             old_y = location_summaries[ind]["y"]
             old_level = location_summaries[ind]["level"]
-        age+=1
+            d_best = 1e9
+            for (i, conn_point) in enumerate(connection_points):
+                x0 = conn_point[old_level][0]
+                y0 = conn_point[old_level][1]
+                d = math.sqrt((x0-old_x)**2 + (y0-old_y)**2)
+                if d<d_best:
+                    old_close_conn = i
+                    d_best = d
+            print("UPDATED: closest connection = {:}".format(i))
+                    
         point["score"] = old_score
         point["x"] = old_x
         point["y"] = old_y
-        point["level"] = old_level
-            
-    
+        point["level"] = old_level        
+        
+    return augmented_points
+        
+
+""" Directly read a summary from a file
+
+Summary is made by one of:
+    process_readings_write_summary
+    add_interp_points then write_summary
+"""
+def read_summary(fname):
+    f = open(fname, "r")
+    lines = f.readlines()
+    f.close()
+    valid_macs = set()
+    new_summary_list = []
+    for line in lines:
+        parts = line.split(',')
+        try: 
+            mac_num = int(parts[0])
+            is_int = True
+        except ValueError:
+            is_int = False
+        if parts[0]=="LOCATION":
+            new_summary = {}
+            new_summary_list.append(new_summary)
+            new_summary["level"] = int(parts[1])
+            new_summary["x"] = float(parts[2])
+            new_summary["y"] = float(parts[3])
+            new_summary["stats"] = {}
+        elif is_int:
+            valid_macs.add(mac_num)
+            new_summary["stats"][mac_num] = [float(parts[1]), float(parts[2]), float(parts[3])]
+    return (new_summary_list, valid_macs)
         
         
 
 if __name__ == "__main__":
-    folder_tablet = "C:/Dev/data/greenstone20160508/tablet"
+    folder_tablet1 = "C:/Dev/data/greenstone20160508/tablet"
+    folder_tablet2 = "C:/Dev/data/greenstone20160510"
     folder_phone = "C:/Dev/data/greenstone20160508/phone"
     location = "greenstone"
     #pixel_per_meter = 38.0 # Home
@@ -285,16 +375,23 @@ if __name__ == "__main__":
     min_dist_m = 2.0
     min_dist_px = min_dist_m*pixel_per_meter
 
-    #date_range1 = datetime.datetime(2016,5,8,0,0,0)
-    #date_range2 = datetime.datetime(2016,5,8,23,59,59)
+    date_range1 = datetime.datetime(2016,5,8,0,0,0)
+    date_range2 = datetime.datetime(2016,5,10,23,59,59)
     
-    location_summaries = process_readings_write_summary(folder_tablet, [date_range1, date_range2], write=True)
-    #(names_tab, macs_tab) = get_macs(folder_tablet+ "/" + "greenstone_macs.txt")
-    #(names_phone, macs_phone) = get_macs(folder_phone+ "/" + "greenstone_macs.txt")
+#==============================================================================
+#   Produce a walkthough from 10 May data:     
+#==============================================================================    
+    #(location_summaries, valid_macs) = read_summary(folder_tablet1 + "/" + "greenstone_summary_20160510_160200.txt")
+    #(names_tab, macs_tab) = get_macs(folder_tablet2+ "/" + "greenstone_macs.txt")
+    #original_points = get_paths(folder_tablet2, [date_range1, date_range2], macs_tab, macs_tab)
+    all_points = process_path(original_points, location_summaries, valid_macs)
     
-    #all_points = get_paths(folder_phone, [date_range1, date_range2], macs_tab, macs_phone)
-    #process_path(all_points, location_summaries)
-      
+    
+    #location_summaries_old = process_readings_write_summary(folder_tablet1, [date_range1, date_range2], write=False)
+    #location_summaries = process_readings_write_summary(folder_tablet2, [date_range1, date_range2], write=False)
+#    (names_tab, macs_tab) = get_macs(folder_tablet+ "/" + "greenstone_macs.txt")
+#    (names_phone, macs_phone) = get_macs(folder_phone+ "/" + "greenstone_macs.txt")
+    
     #filename = "home_readings_20160506_170235.txt"
     #all_readings = get_single_readings(filename)    
     #single_obs_summaries = make_summaries_from_single(all_readings)

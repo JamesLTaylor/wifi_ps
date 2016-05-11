@@ -59,7 +59,7 @@ fig, (ax_upper, ax_lower) = plt.subplots(2, 1)
 #mng = plt.get_current_fig_manager()
 #mng.full_screen_toggle()
 
-for (num, name) in int_to_name.iteritems():
+for (num, name) in names_tab.iteritems():
     ax_upper.cla()
     ax_upper.imshow(upper_img_faded, zorder=0, extent=[0, 2200, 0, 1054])    
     ax_upper.set_xlim(400, 1100) 
@@ -70,7 +70,7 @@ for (num, name) in int_to_name.iteritems():
     ax_lower.axis([300, 1000, 100, 500])
     ax_lower.set_ylim(500, 100) 
     
-    add_points(ax_upper, ax_lower, num, name, location_summaries)
+    add_points(ax_upper, ax_lower, num, name, extended_location_summaries)
     
     plt.draw()
     time.sleep(0.25)
