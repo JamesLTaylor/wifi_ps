@@ -4,6 +4,9 @@ import math
 import numpy as np
 import copy
 
+import fix_path
+import visualize_greenstone_path
+
 
 
 """ finds the nearest aggregate in the list or makes a new one.
@@ -213,7 +216,10 @@ def get_macs(fname):
     return int_to_name, int_to_mac
     
 def translate_mac(i, macs_from, macs_to):
-    mac = macs_from[i]
+    if macs_from.has_key(i):
+        mac = macs_from[i]
+    else:
+        return 10000+i
     for (num, name) in macs_to.iteritems():
         if name==mac:        
             return num
@@ -222,14 +228,28 @@ def translate_mac(i, macs_from, macs_to):
     
 """
 """
-def get_paths(folder, date_range, macs_summaries, macs_path):
+def get_paths(folder, macs_summaries, macs_path, **kwargs):    
+    date_range = []
+    fname = ""
+    if len(kwargs)>1:
+        raise Exception("Provide only one of 'fname' or 'date_range'")
+    for key in kwargs:
+        if key == "fname":
+            fname = kwargs[key]
+        elif key == "date_range":
+            date_range = kwargs[key]
+        else:
+            raise Exception("Provide only one of 'fname' or 'date_range'")
+    
     allfiles = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
     all_points = []
     for filename in allfiles:
         parts = filename[:-4].split("_",2)
         if parts[1]=="continuous":
             date = datetime.datetime.strptime(parts[2], "%Y%m%d_%H%M%S")
-            if date>=date_range[0] and date<=date_range[1]:
+            if ( (len(fname)>0 and filename==fname) or 
+                 (len(date_range)>0 and date>=date_range[0] and date<=date_range[1]) ):
+            
                 f = open(os.path.join(folder, filename), "r")
                 lines = f.readlines()
                 f.close()
@@ -251,6 +271,29 @@ def get_paths(folder, date_range, macs_summaries, macs_path):
                         this_point["stats"][new_mac_num] = [1, float(parts[1]), 0]
                 
     return all_points
+    
+""" Take the n point average of all the points in a path.
+"""
+def get_paths_n(n, all_points):
+    avg_points = []
+    for i in range((n-1), len(all_points)):
+        this_point = {}
+        this_point["time"] = all_points[i]["time"]
+        this_point["offset"] = all_points[i]["offset"]
+        this_point["stats"] = {}
+        avg_points.append(this_point)
+        all_keys = set()
+        for j in range(n):
+            all_keys = all_keys.union(all_points[i-j]["stats"].keys())        
+        
+        for key in all_keys:
+            means = []
+            for j in range(n):
+                if all_points[i-j]["stats"].has_key(key):
+                    means.append(all_points[i-j]["stats"][key])
+            this_point["stats"][key] = [float(len(means))/n, np.mean(means), 0]
+                
+    return avg_points    
     
     
 """ Takes a path from:
@@ -283,11 +326,9 @@ def process_path(all_points, location_summaries, valid_macs):
         if old_score<=-1000: # first point
             update = True
         elif ind==old_ind:
-            update = False
+            update = True
             print("same place")
         else:
-            if (i==8):
-                stop = "here"
             x = location_summaries[ind]["x"]
             y = location_summaries[ind]["y"]
             level = location_summaries[ind]["level"]
@@ -322,7 +363,7 @@ def process_path(all_points, location_summaries, valid_macs):
                 if d<d_best:
                     old_close_conn = i
                     d_best = d
-            print("UPDATED: closest connection = {:}".format(i))
+            print("UPDATED: closest connection = {:}".format(old_close_conn))
                     
         point["score"] = old_score
         point["x"] = old_x
@@ -368,6 +409,7 @@ def read_summary(fname):
 if __name__ == "__main__":
     folder_tablet1 = "C:/Dev/data/greenstone20160508/tablet"
     folder_tablet2 = "C:/Dev/data/greenstone20160510"
+    folder_tablet3 = "C:/Dev/data/greenstone20160511"
     folder_phone = "C:/Dev/data/greenstone20160508/phone"
     location = "greenstone"
     #pixel_per_meter = 38.0 # Home
@@ -379,12 +421,17 @@ if __name__ == "__main__":
     date_range2 = datetime.datetime(2016,5,10,23,59,59)
     
 #==============================================================================
-#   Produce a walkthough from 10 May data:     
+#   Produce a walkthough from 11 May data:     
 #==============================================================================    
-    #(location_summaries, valid_macs) = read_summary(folder_tablet1 + "/" + "greenstone_summary_20160510_160200.txt")
-    #(names_tab, macs_tab) = get_macs(folder_tablet2+ "/" + "greenstone_macs.txt")
-    #original_points = get_paths(folder_tablet2, [date_range1, date_range2], macs_tab, macs_tab)
-    all_points = process_path(original_points, location_summaries, valid_macs)
+    (location_summaries, valid_macs) = read_summary(folder_tablet1 + "/" + "greenstone_summary_20160510_160200.txt")
+    (names_tab, macs_tab) = get_macs(folder_tablet2+ "/" + "greenstone_macs.txt")
+    #original_points = get_paths(folder_tablet2, macs_tab, macs_tab, date_range = [date_range1, date_range2])
+    original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130140.txt")
+    original_points_processed = process_path(original_points, location_summaries, valid_macs)
+    avg_points = get_paths_n(3, original_points)
+    avg_points_processed = process_path(avg_points, location_summaries, valid_macs)
+    smooth_points = fix_path.fix_path(original_points_processed)
+    #visualize_greenstone_path.show(original_points_processed)
     
     
     #location_summaries_old = process_readings_write_summary(folder_tablet1, [date_range1, date_range2], write=False)
