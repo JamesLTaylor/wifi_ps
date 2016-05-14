@@ -6,6 +6,7 @@ import time
 import copy
 import datetime
 import os
+import process_android
 
 def show_points(location_summaries):
     datafile = cbook.get_sample_data('C:/Dev/android/WifiRecord/app/src/main/res/drawable/greenstone_lower.png')
@@ -102,19 +103,23 @@ avg_pairs =[[0,1],
             [3,4],
             [4,5],
             [3,6],
-            [0,3],
             [6,7],
             [7,8],
             [8,9],
+            [9,10],
+            [10,11],
             [12,13],
             [13,14],
             [14,15],
             [15,16],
             [16,17],
             [17,18]]
-#extended_location_summaries = add_interp_points(avg_pairs, location_summaries)
-show_points(location_summaries)
-#write_summary(folder_tablet,"greenstone", extended_location_summaries)            
+folder_tablet4 = "C:/Dev/data/greenstone20160513"
+folder_tablet1 = "C:/Dev/data/greenstone20160508/tablet"
+(location_summaries, valid_macs) = process_android.read_summary(folder_tablet1 + "/" + "greenstone_summary_20160510_084525.txt")
+extended_location_summaries = add_interp_points(avg_pairs, location_summaries)
+show_points(extended_location_summaries)
+#write_summary(folder_tablet4,"greenstone", extended_location_summaries)            
 
 
         

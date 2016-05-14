@@ -144,6 +144,7 @@ Single obs
 
 Multiple obs
 
+Make it such that no reading gets -100
 """   
 def get_diff(obs, location, valid_macs):
     score = 0
@@ -152,7 +153,7 @@ def get_diff(obs, location, valid_macs):
     w3 = 2
     weighting = 0
     for loc_mac_key, loc_stats in location.iteritems():
-        weighting += loc_stats[0]
+        weighting += w2 * loc_stats[0] * abs(-90-loc_stats[1])
         if loc_mac_key in obs.keys():
             # in fingerprint and in obs
             d = abs(loc_stats[1] - obs[loc_mac_key][1])
@@ -167,7 +168,7 @@ def get_diff(obs, location, valid_macs):
             score -= w3 * obs_stats[0] * abs(-90-obs_stats[1])
             # in obs but not fingerprint
 
-    return score/weighting         
+    return 100.0 * score/weighting         
     
     
 """ make a list of summaries as if each reading was the whole observation
@@ -290,7 +291,7 @@ def get_paths_n(n, all_points):
             means = []
             for j in range(n):
                 if all_points[i-j]["stats"].has_key(key):
-                    means.append(all_points[i-j]["stats"][key])
+                    means.append(all_points[i-j]["stats"][key][1])
             this_point["stats"][key] = [float(len(means))/n, np.mean(means), 0]
                 
     return avg_points    
@@ -304,6 +305,7 @@ def process_path(all_points, location_summaries, valid_macs):
     px_per_meter = 4.20 # Greenstone
     walking_pace = 2.0 # FAST: 7.6km/h
     augmented_points = copy.deepcopy(all_points)
+    age = 0
     old_score = - 1001
     old_ind = 0
     old_t = 0
@@ -315,9 +317,14 @@ def process_path(all_points, location_summaries, valid_macs):
     old_close_conn = 0
 
     for (i, point) in enumerate(augmented_points):
+        if i==len(augmented_points)-1:
+            aaa = 1
         print ("")
-        print("currently at {:},{:},{:} with score {:}".format(old_level, old_x, old_y, old_score))
+        print (str(i))
+        print (age)
         diffs = [get_diff(point["stats"], location_summary["stats"], valid_macs) for location_summary in location_summaries]
+        
+        print("currently at {:},{:},{:} with score {:}".format(old_level, old_x, old_y, diffs[old_ind]))        
         ind = np.argmax(diffs)
         score = np.max(diffs)        
         print("new best score = {:3.0f} at {:},{:},{:}".format(score, location_summaries[ind]["x"], location_summaries[ind]["y"], location_summaries[ind]["level"]))
@@ -325,6 +332,8 @@ def process_path(all_points, location_summaries, valid_macs):
         update = False
         if old_score<=-1000: # first point
             update = True
+        elif (score<(diffs[old_ind]+5) and age<3):
+            update = False
         elif ind==old_ind:
             update = True
             print("same place")
@@ -346,9 +355,10 @@ def process_path(all_points, location_summaries, valid_macs):
             print("time to get there: {:}".format(time_to_there))
             if time_to_there*1000 < (point["offset"] - old_t):
                 update=True
-                print("close enough")
+                #print("close enough")
                 
         if update:
+            age = 0
             old_ind = ind
             old_t = point["offset"]
             old_score = score
@@ -364,6 +374,8 @@ def process_path(all_points, location_summaries, valid_macs):
                     old_close_conn = i
                     d_best = d
             print("UPDATED: closest connection = {:}".format(old_close_conn))
+        else:
+            age += 1
                     
         point["score"] = old_score
         point["x"] = old_x
@@ -395,7 +407,7 @@ def read_summary(fname):
         if parts[0]=="LOCATION":
             new_summary = {}
             new_summary_list.append(new_summary)
-            new_summary["level"] = int(parts[1])
+            new_summary["level"] = int(np.round(float(parts[1])))
             new_summary["x"] = float(parts[2])
             new_summary["y"] = float(parts[3])
             new_summary["stats"] = {}
@@ -410,6 +422,7 @@ if __name__ == "__main__":
     folder_tablet1 = "C:/Dev/data/greenstone20160508/tablet"
     folder_tablet2 = "C:/Dev/data/greenstone20160510"
     folder_tablet3 = "C:/Dev/data/greenstone20160511"
+    folder_tablet4 = "C:/Dev/data/greenstone20160513"
     folder_phone = "C:/Dev/data/greenstone20160508/phone"
     location = "greenstone"
     #pixel_per_meter = 38.0 # Home
@@ -423,15 +436,20 @@ if __name__ == "__main__":
 #==============================================================================
 #   Produce a walkthough from 11 May data:     
 #==============================================================================    
-    (location_summaries, valid_macs) = read_summary(folder_tablet1 + "/" + "greenstone_summary_20160510_160200.txt")
+    #(location_summaries, valid_macs) = read_summary(folder_tablet1 + "/" + "greenstone_summary_20160510_160200.txt")
+    (location_summaries, valid_macs) = read_summary(folder_tablet4 + "/" + "greenstone_summary_20160513_105108.txt")    
     (names_tab, macs_tab) = get_macs(folder_tablet2+ "/" + "greenstone_macs.txt")
+    
     #original_points = get_paths(folder_tablet2, macs_tab, macs_tab, date_range = [date_range1, date_range2])
-    original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130140.txt")
+    original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130140.txt")    
+    #original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130351.txt")
+    
     original_points_processed = process_path(original_points, location_summaries, valid_macs)
+    smooth_points = fix_path.fix_path(original_points_processed, level=1)
     avg_points = get_paths_n(3, original_points)
     avg_points_processed = process_path(avg_points, location_summaries, valid_macs)
-    smooth_points = fix_path.fix_path(original_points_processed)
-    #visualize_greenstone_path.show(original_points_processed)
+    #smooth_avg_points = fix_path.fix_path(avg_points_processed)
+    visualize_greenstone_path.show([smooth_points, original_points_processed, avg_points_processed])
     
     
     #location_summaries_old = process_readings_write_summary(folder_tablet1, [date_range1, date_range2], write=False)

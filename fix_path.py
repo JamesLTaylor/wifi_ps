@@ -2,7 +2,7 @@ import copy
 import numpy as np
 import datetime
 import matplotlib.pyplot as plt
-
+import math
 
 """ Takes a path on a single level with estimated x and y positions and spreads 
 it out evenly according to the time.
@@ -14,7 +14,19 @@ def fix_path(points_in, level=None):
     if level is None:
         path1 = np.array([ [point["x"], point["y"], point["offset"], i] for (i, point) in enumerate(points_in)])
     else:
-        path1 = np.array([[point["x"], point["y"], point["offset"], i] for (i,point) in enumerate(points_in) if point["level"]==1])
+        path1 = np.array([[point["x"], point["y"], point["offset"], i] for (i,point) in enumerate(points_in) if point["level"]==level])
+        
+    # no point should be returned to after a step away from it
+    for i in range(1, len(path1)):
+        d = abs(path1[i,0]-path1[i-1,0]) + abs(path1[i,1]-path1[i-1,1])
+        if d>2: # Have moved, check it is not back to somewhere we recently were
+            for j in range(max(0, i-10), i):
+                d = abs(path1[i,0]-path1[j,0]) + abs(path1[i,1]-path1[j,1])
+                if d < 2:
+                    path1[i,0] = path1[i-1,0]
+                    path1[i,1] = path1[i-1,1]
+            
+    
     
     shift_for_display = 10 # only set this if you want to display the orignal and fixed paths
     points_out = copy.deepcopy(points_in)
@@ -25,9 +37,9 @@ def fix_path(points_in, level=None):
         
     cum_len = cum_len/cum_len[-1]
         
-    start_lag = 0 # to allow that the walk did not start exactly at the first 
+    start_lag = 5000 # to allow that the walk did not start exactly at the first 
                   # mapped point or that there was a period o
-    end_lag = 0
+    end_lag = 8000
     new_path = np.zeros((len(path1),2))
     new_path[0,:] = path1[0,0:2] + [0,shift_for_display]
     for i in range(1, len(path1)):
@@ -49,19 +61,22 @@ def fix_path(points_in, level=None):
         points_out[int(np.round(path1[i,3]))]["x"] = new_path[i,0]
         points_out[int(np.round(path1[i,3]))]["y"] = new_path[i,1]
         
-    plt.figure()
-    plt.plot(path1[:,0], path1[:,1])
-
-    plt.figure()        
-    for i in range(len(path1)):
-        plt.plot([new_path[i,0], path1[i,0]],[new_path[i,1], path1[i,1]], color="Black")
+#    plt.figure()
+#    path1 = path1
+#    plt.plot(path1[:,0], path1[:,1])
+#    plt.gca().set_ylim(800, 400)
+#
+#    plt.figure()        
+#    plt.gca().set_ylim(800, 400)
+#    for i in range(len(path1)):
+#        plt.plot([new_path[i,0], path1[i,0]],[new_path[i,1], path1[i,1]], color="Black")
     
         
     return points_out        
  
  
 if __name__ == "__main__":
-    fix_path(all_points)
+    fix_path(original_points_processed)
     
     
     
