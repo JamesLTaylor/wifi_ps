@@ -35,6 +35,20 @@ def get_aggregate(aggregates, x, y, level):
     aggregates.append(new_aggregate)
     return new_aggregate
     
+
+
+""" Write a list of summaries to a file
+"""    
+def write_summary(folder, name, location_summaries):
+    now_str = datetime.datetime.strftime(datetime.datetime.now(), "%Y%m%d_%H%M%S")
+    f = open(os.path.join(folder, name + "_summary_" + now_str + ".txt"), "w")
+    for location in location_summaries:    
+        f.write("LOCATION,"+str(location["level"])+","+"{:.1f}".format(location["x"])+","+"{:.1f}".format(location["y"]) + "\n")
+        for (key, data) in location["stats"].iteritems():
+            f.write(str(key) + "," + "{:.1f}".format(data[0]) + "," + "{:.1f}".format(data[1]) + "," + "{:.1f}".format(data[2]) + "\n")
+        
+    f.close()    
+    
 """ Writes a summary file and returns a list of summaries:
 
     x: 
@@ -227,7 +241,7 @@ def translate_mac(i, macs_from, macs_to):
     
     return 10000+i
     
-"""
+""" Returns the path with mac ids as in macs_summaries.
 """
 def get_paths(folder, macs_summaries, macs_path, **kwargs):    
     date_range = []

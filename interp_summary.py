@@ -84,18 +84,6 @@ def add_interp_points(avg_pairs, location_summaries):
                                   
     return extended_location_summaries
     
-def write_summary(folder, name, location_summaries):
-    now_str = datetime.datetime.strftime(datetime.datetime.now(), "%Y%m%d_%H%M%S")
-    f = open(os.path.join(folder, name + "_summary_" + now_str + ".txt"), "w")
-    for location in location_summaries:    
-        f.write("LOCATION,"+str(location["level"])+","+"{:.1f}".format(location["x"])+","+"{:.1f}".format(location["y"]) + "\n")
-        for (key, data) in location["stats"].iteritems():
-            f.write(str(key) + "," + "{:.1f}".format(data[0]) + "," + "{:.1f}".format(data[1]) + "," + "{:.1f}".format(data[2]) + "\n")
-        
-    f.close()
-                             
-            
-    
 
 avg_pairs =[[0,1],
             [1,2],
