@@ -109,8 +109,20 @@ class drawer(object):
             self.draw()
             
 def interp_path(frac, path_lr):
-    x = 1076 + frac*(1807-1076)
-    y = 614 + frac *(502-614)
+    if frac >= (1-1e-9):
+        return (path_lr[-1][0], path_lr[-1][1])
+    elif frac <= (1e-9):
+        return (path_lr[0][0], path_lr[0][1])
+        
+    p = np.array(path_lr)
+    cum_length = np.cumsum(np.append([0], np.sqrt((p[1:,0]-p[:-1,0])**2 + (p[1:,1]-p[:-1,1])**2)))
+    cum_frac = cum_length/cum_length[-1]
+    left_ind = np.where(cum_frac<=frac)[0][-1]
+    w = (frac - cum_frac[left_ind])/(cum_frac[left_ind+1]-cum_frac[left_ind])
+    
+    x = p[left_ind, 0] + w * (p[left_ind+1, 0] - p[left_ind, 0])
+    y = p[left_ind, 1] + w * (p[left_ind+1, 1] - p[left_ind, 1])
+
     return (x,y)
 
 """ For each mac address plot signal strength as function of fraction of path
@@ -146,7 +158,8 @@ def create_location_summaries(path_lr, original_points, all_ids):
             res = fit(x,y)
             for summary in location_summaries:
                 if summary["frac"] >= min(x) and summary["frac"] <= max(x):
-                    summary["stats"][mac_id] = [density, float(func5(summary["frac"],*res.x)), 0]    
+                    #summary["stats"][mac_id] = [density, float(func5(summary["frac"],*res.x)), 0]    
+                    summary["stats"][mac_id] = [1.0, float(func5(summary["frac"],*res.x)), 0]    
                     
     return (location_summaries, valid_macs)
 
@@ -175,12 +188,12 @@ if __name__ == "__main__":
 #==============================================================================
 # Get points from files
 #==============================================================================
-    #original_points = process_android.get_paths(folder_tablet, macs_tablet, macs_tablet, date_range = [date_range1, date_range2])
-    #phone_points = process_android.get_paths(folder_phone, macs_tablet, macs_phone, date_range = [date_range1, date_range2])
-    #for point in phone_points:
-    #    point["phone"] = True
-    #    point["time"] = point["time"] + datetime.timedelta(seconds=phone_offset)
-    #original_points = original_points + phone_points
+    original_points = process_android.get_paths(folder_tablet, macs_tablet, macs_tablet, date_range = [date_range1, date_range2])
+    phone_points = process_android.get_paths(folder_phone, macs_tablet, macs_phone, date_range = [date_range1, date_range2])
+    for point in phone_points:
+        point["phone"] = True
+        point["time"] = point["time"] + datetime.timedelta(seconds=phone_offset)
+    original_points = original_points + phone_points
     
 
 #==============================================================================
@@ -204,10 +217,14 @@ if __name__ == "__main__":
 #plot_fits(all_ids, original_points, macs_tablet, names_tablet)
 (location_summaries, valid_macs) = create_location_summaries(path_lr, original_points, all_ids)
 
+(old_location_summaries, valid_macs) = process_android.read_summary("C:/Dev/data/greenstone20160513" + "/" + "greenstone_summary_20160513_105108.txt")
+new_location_summaries = location_summaries + old_location_summaries
+process_android.write_summary("c:\\dev\\data\\summaries","greenstone",new_location_summaries)
+
 #==============================================================================
 # Process and view a single path 
 #==============================================================================
 #path = process_android.get_paths(folder_tablet, macs_tablet, macs_tablet, fname = "greenstone_continuous_20160516_124224.txt")
 #new_path = process_android.process_path(path, location_summaries, valid_macs)
 #visualize_greenstone_path.show([new_path])       
-            
+           
