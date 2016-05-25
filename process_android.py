@@ -160,7 +160,7 @@ Multiple obs
 
 Make it such that no reading gets -100
 """   
-def get_diff(obs, location, valid_macs):
+def get_diff_old(obs, location, valid_macs):
     score = 0
     w1 = 1
     w2 = 1
@@ -183,6 +183,35 @@ def get_diff(obs, location, valid_macs):
             # in obs but not fingerprint
 
     return 100.0 * score/weighting         
+    
+def get_diff(obs, location, valid_macs):
+    score = 0
+    w1 = 1
+    w2 = 1
+    w3 = 2
+    tol = 10
+    weighting = 0
+    for loc_mac_key, loc_stats in location.iteritems():
+        weighting += w2 * loc_stats[0]
+        if loc_mac_key in obs.keys():
+            # in fingerprint and in obs
+            d = abs(loc_stats[1] - obs[loc_mac_key][1])
+            d = max(0, d-tol)
+            score -= w1 * d * loc_stats[0]
+        else:
+            # in fingerprint but not in obs
+            d = abs(-90-loc_stats[1])
+            d = max(0, d-tol)
+            score -= w2 * loc_stats[0] * d
+            
+    for obs_mac_key, obs_stats in obs.iteritems():
+        if obs_mac_key in valid_macs and obs_mac_key not in location.keys():
+            d = abs(-90-obs_stats[1])
+            d = max(0, d-tol)
+            score -= w3 * obs_stats[0] * d
+            # in obs but not fingerprint
+
+    return 20*score/weighting      
     
     
 """ make a list of summaries as if each reading was the whole observation
@@ -451,19 +480,21 @@ if __name__ == "__main__":
 #   Produce a walkthough from 11 May data:     
 #==============================================================================    
     #(location_summaries, valid_macs) = read_summary(folder_tablet1 + "/" + "greenstone_summary_20160510_160200.txt")
+    
     (location_summaries, valid_macs) = read_summary(folder_tablet4 + "/" + "greenstone_summary_20160513_105108.txt")    
     (names_tab, macs_tab) = get_macs(folder_tablet2+ "/" + "greenstone_macs.txt")
     
     #original_points = get_paths(folder_tablet2, macs_tab, macs_tab, date_range = [date_range1, date_range2])
-    original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130140.txt")    
-    #original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130351.txt")
+    #original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130140.txt")    
+    original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130351.txt")
     
     original_points_processed = process_path(original_points, location_summaries, valid_macs)
-    smooth_points = fix_path.fix_path(original_points_processed, level=1)
-    avg_points = get_paths_n(3, original_points)
-    avg_points_processed = process_path(avg_points, location_summaries, valid_macs)
+    #smooth_points = fix_path.fix_path(original_points_processed, level=1)
+    #avg_points = get_paths_n(3, original_points)
+    #avg_points_processed = process_path(avg_points, location_summaries, valid_macs)
     #smooth_avg_points = fix_path.fix_path(avg_points_processed)
-    visualize_greenstone_path.show([smooth_points, original_points_processed, avg_points_processed])
+    #visualize_greenstone_path.show([smooth_points, original_points_processed, avg_points_processed])
+    visualize_greenstone_path.show([original_points_processed])
     
     
     #location_summaries_old = process_readings_write_summary(folder_tablet1, [date_range1, date_range2], write=False)
