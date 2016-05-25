@@ -15,6 +15,10 @@ class Application(ttk.Frame):
         root.grid_columnconfigure(0,weight=1)        
         root.grid_rowconfigure(0,weight=1)
         self.point_selected = False
+        self.lines = []
+        self.dots = []
+        self.set_new_image()
+        
         
     def set_constants(self):
         self.images = {"Home":
@@ -30,7 +34,7 @@ class Application(ttk.Frame):
         top_frame = tk.Frame(self) 
         self.location_var = tk.StringVar(top_frame)
         values = self.images.keys() 
-        self.location_var.set(values[0])
+        self.location_var.set(values[1])
         self.location_option = tk.OptionMenu(top_frame, self.location_var, *values)
         self.location_option.grid(row = 0, column=0, padx=5, pady=10, sticky=tk.W)
         self.location_var.trace("w", self.location_change)
@@ -78,6 +82,8 @@ class Application(ttk.Frame):
         btn_rec.grid(row = 0, column=0, padx=5, pady=10, sticky=tk.W)
         btn_id = tk.Button(bottom_frame, text="Identifiy")
         btn_id.grid(row = 0, column=1, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="New path",command=self.new_path)
+        btn_new_path.grid(row = 0, column=2, padx=5, pady=10, sticky=tk.W)
         
         top_frame.grid(row=0, column=0, sticky=tk.W)
         canvas_frame.grid(row=1, column=0, sticky=tk.N+tk.S+tk.E+tk.W)
@@ -147,15 +153,19 @@ class Application(ttk.Frame):
             self.canvas.xview('moveto',new_x)
             self.canvas.yview('moveto',new_y)
         else:
-            if not self.point_selected:
-                self.point_selected = True
-                self.latest_x = canvas.canvasx(event.x)
-                self.latest_y = canvas.canvasy(event.y)
-                self.latestpoint = self.canvas.create_oval(self.latest_x-4, self.latest_y-4, self.latest_x+4, self.latest_y+4, fill="red")                
-                print("location set to: " + str((self.latest_x, self.latest_y)))            
-            else:
-                tkMessageBox.showwarning("Duplciate point", 
-                "A point is already selected for this floorplan.\nPlease record it before selecting another")
+            if self.point_selected:
+                self.lines.append(self.canvas.create_line(self.latest_x, self.latest_y, canvas.canvasx(event.x), canvas.canvasy(event.y), tag = "path"))
+                
+            self.point_selected = True
+            self.latest_x = canvas.canvasx(event.x)
+            self.latest_y = canvas.canvasy(event.y)
+            self.latestpoint = self.canvas.create_oval(self.latest_x-4, self.latest_y-4, self.latest_x+4, self.latest_y+4, fill="red")                
+            self.dots.append(self.latestpoint)
+            #print("location set to: " + str((self.latest_x, self.latest_y)))            
+            print("[" + str(self.latest_x) + "," + str(self.latest_y) + "],")            
+            #else:
+            #    tkMessageBox.showwarning("Duplicate point", 
+            #    "A point is already selected for this floorplan.\nPlease record it before selecting another")
 
     def record(self, *args):  
         if self.point_selected:
@@ -166,6 +176,18 @@ class Application(ttk.Frame):
         else:
             tkMessageBox.showwarning("No point selected", 
             "No point is selected for this floorplan.\nPlease select one and then record.")
+            
+    def new_path(self, *args):
+        self.point_selected = False
+        for line in self.lines:
+            self.canvas.delete(line)
+        for dot in self.dots:
+            self.canvas.delete(dot)
+        self.lines =[]
+        self.dots = []
+        print("")
+        print("")
+        self.set_new_image()
         
 
 if __name__ == "__main__":
