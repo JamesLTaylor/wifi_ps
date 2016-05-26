@@ -259,16 +259,30 @@ def get_macs(fname):
     
     return int_to_name, int_to_mac
     
+    
+"""
+If the mac appears in both lookups return the index in macs_to corresponding to 
+the mac at index i in macs_from
+
+args:
+    i: index in macs_from
+    macs_from: lookup for supplied number
+    macs_to: target macs, index in this lookup will be returned
+"""     
 def translate_mac(i, macs_from, macs_to):
     if macs_from.has_key(i):
         mac = macs_from[i]
     else:
+        print("unknown mac 1")
         return 10000+i
+        
     for (num, name) in macs_to.iteritems():
         if name==mac:        
             return num
     
+    print("unknown mac 2")
     return 10000+i
+    
     
 """ Returns the path with mac ids as in macs_summaries.
 """
@@ -285,12 +299,27 @@ def get_paths(folder, macs_summaries, macs_path, **kwargs):
         else:
             raise Exception("Provide only one of 'fname' or 'date_range'")
     
-    allfiles = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+    if len(fname)>0:
+        allfiles = [fname]
+    else:
+        allfiles = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
     all_points = []
-    for filename in allfiles:
+    for filename in allfiles:        
+        use = False
+        
+        # Old filename format
         parts = filename[:-4].split("_",2)
-        if parts[1]=="continuous":
+        if len(parts)>=2 and parts[1]=="continuous":
             date = datetime.datetime.strptime(parts[2], "%Y%m%d_%H%M%S")
+            use = True
+            
+        # New filename format
+        parts = filename[:-4].split("_")        
+        if len(parts)>=5 and parts[4]=="path":
+            date = datetime.datetime.strptime(parts[1]+"_"+parts[2], "%Y%m%d_%H%M%S")
+            use = True
+            
+        if use:
             if ( (len(fname)>0 and filename==fname) or 
                  (len(date_range)>0 and date>=date_range[0] and date<=date_range[1]) ):
             
@@ -486,7 +515,9 @@ if __name__ == "__main__":
     
     #original_points = get_paths(folder_tablet2, macs_tab, macs_tab, date_range = [date_range1, date_range2])
     #original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130140.txt")    
+    start = datetime.datetime.now()
     original_points = get_paths(folder_tablet3, macs_tab, macs_tab, fname="greenstone_continuous_20160511_130351.txt")
+    print(datetime.datetime.now()-start).total_seconds()
     
     original_points_processed = process_path(original_points, location_summaries, valid_macs)
     #smooth_points = fix_path.fix_path(original_points_processed, level=1)
