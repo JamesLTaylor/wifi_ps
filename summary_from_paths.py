@@ -510,43 +510,4 @@ if __name__ == "__main__":
     (all_data, full_macs, full_names) = get_all_data()
     create_location_summaries(all_data, full_macs, summary_points, location_summaries, spacing_px)
     
-#    colors = ["Red", "orange", "Green", "lightgreen", "Blue", "lightblue"]
-#    
-#    path_name = "TRUWORTHS/ENT-WW"
-#    data1 = all_data[path_name]
-#    combined_points = []
-#    for (i, path_data) in enumerate(data1):
-#        total_time = float(path_data["path"][-1]["offset"])
-#        for point in path_data["path"]:
-#            frac = point["offset"]/total_time
-#            if path_data["direction"] < 0: 
-#                frac = 1-frac
-#            point["frac"] = frac
-#            point["color"] = colors[i]
-#            
-#        combined_points+=path_data["path"]
-#       
-#    #plot_fits(full_macs.keys(), combined_points, full_macs, full_names)
-#    #plot_fits([173], combined_points, full_macs, full_names)
-#    
-#    update_location_summaries(paths[path_name], combined_points, full_macs.keys(), 
-#                              summary_points, location_summaries, path_name, spacing_px)
-#    
-#    
-#    """
-#    mac_id = 22
-#    x = np.array([p["frac"] for p in combined_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
-#    y = np.array([p["stats"][mac_id][1] for p in combined_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
-#    x=x[y>=-90]
-#    y=y[y>=-90]
-#"""
-#    
-#   
-#    
-#
-#    
-#    #fname_macs = "greenstone_20160524_115301_tablet_macs.txt"
-#    #fname_walk = "greenstone_20160524_115301_tablet_path.txt"
-#    #process_android.get_macs(fname_macs)
-    
            
