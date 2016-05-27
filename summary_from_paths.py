@@ -222,20 +222,28 @@ def update_location_summaries(path_segments, obs_points, all_ids, summary_points
         x=x[y>=-90]
         y=y[y>=-90]
 
+        add_empty = False
         if len(x)>30:
-            valid_macs.append(mac_id)
-            density = len(x)/(max(x)-min(x))
-            res = fit(x,y)            
-            for (i, (distance, path_frac)) in enumerate(distances):
-                if distance<spacing_px/2: # close to a summary point so add to that summary point
-                    summary_dict = location_summaries[i]
-                    if not summary_dict["aggs"].has_key(path_name):
-                        summary_dict["aggs"][path_name] = {}
-                    l = max(0, path_frac-(spacing_px/2)/ path_obj.len)
-                    r = min(1, path_frac+(spacing_px/2)/ path_obj.len)
-                    total = np.sum(np.logical_and(all_x>=l, all_x<=r))
+            res = fit(x,y)
+        else:
+            res = None
+            
+        for (i, (distance, path_frac)) in enumerate(distances):
+            if distance<spacing_px/2: # close to a summary point so add to that summary point
+                summary_dict = location_summaries[i]
+                if not summary_dict["aggs"].has_key(mac_id):
+                    summary_dict["aggs"][mac_id] = {}
+                l = max(0, path_frac-(spacing_px/2)/ path_obj.len)
+                r = min(1, path_frac+(spacing_px/2)/ path_obj.len)
+                total = np.sum(np.logical_and(all_x>=l, all_x<=r))
+                if not res is None:
                     count = np.sum(np.logical_and(x>=l, x<=r))
-                    summary_dict["aggs"][path_name][mac_id] = [total, count, float(func5(path_frac,*res)), 0.0]
+                    summary_dict["aggs"][mac_id][path_name] = [total, count, float(func5(path_frac,*res)), 0.0]
+                else:
+                    summary_dict["aggs"][mac_id][path_name] = [total, 0, 0, 0.0]
+
+            
+            
                     
     #return (location_summaries, valid_macs)
     
@@ -496,18 +504,35 @@ def create_location_summaries(all_data, full_macs, summary_points, location_summ
             
         update_location_summaries(paths[path_name], combined_points, full_macs.keys(), 
                               summary_points, location_summaries, path_name, spacing_px)
-                              
 
-        
 
+def convert_aggs_to_stats():
+    # convert aggregates into summary stats                              
+    for summary in location_summaries:
+        for mac_id in summary["aggs"]:
+            total = 0
+            count = 0
+            sum_means = 0
+            for (path_name, values) in summary["aggs"][mac_id].iteritems():
+                sum_means += values[1]*values[2]
+                total += values[0]
+                count += values[1]
+                
+            if count>0:
+                summary["stats"][mac_id] = [float(count)/total, sum_means/count, 0]
+                
+                
+                
 
 if __name__ == "__main__":
     
     # read all the paths to find common summary points
-    paths = path_source.greenstone()
-    spacing_px = 5*4.2
-    (summary_points, location_summaries) = make_summary_points(paths, spacing_px)
-    (all_data, full_macs, full_names) = get_all_data()
-    create_location_summaries(all_data, full_macs, summary_points, location_summaries, spacing_px)
-    
-           
+#    paths = path_source.greenstone()
+#    spacing_px = 5*4.2
+#    (summary_points, location_summaries) = make_summary_points(paths, spacing_px)
+#    (all_data, full_macs, full_names) = get_all_data()
+#    create_location_summaries(all_data, full_macs, summary_points, location_summaries, spacing_px)
+#    
+    #convert_aggs_to_stats()
+    #process_android.write_summary("c:\\dev\\data", "greenstone", location_summaries)
+    process_android.write_macs("c:\\dev\\data", "greenstone", full_macs, full_names)

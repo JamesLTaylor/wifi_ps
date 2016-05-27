@@ -259,6 +259,17 @@ def get_macs(fname):
     
     return int_to_name, int_to_mac
     
+""" Returns a dictionary with keys as ints used in the recordings and values 
+as the names of the APs
+"""
+def write_macs(folder, location, macs, ap_names):
+    f = open(os.path.join(folder, location + "_macs.txt"), "w")
+    
+    for i in macs.keys():
+        f.write(macs[i] + "," + ap_names[i] + "," + str(i) + "\n")
+        #print(macs[i] + "," + ap_names[i] + "," + str(i))
+    f.close() 
+    
     
 """
 If the mac appears in both lookups return the index in macs_to corresponding to 
