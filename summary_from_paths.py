@@ -79,7 +79,7 @@ def fit(x, y):
             (0, 100),
             (20, None))
             
-    res = minimize(func5_res, x0, args=(x,y), method = "L-BFGS-B", bounds = bounds, options={'gtol': 1e-6, 'disp': True})
+    res = minimize(func5_res, x0, args=(x,y), method = "L-BFGS-B", bounds = bounds, options={'gtol': 1e-6, 'disp': False})
     return res.x
     
     
@@ -208,36 +208,36 @@ def plot_fits(all_ids, original_points, macs_tablet, names_tablet):
     
     
     
-def create_location_summaries(path_lr, original_points, all_ids):
+def update_location_summaries(path_segments, obs_points, all_ids, summary_points, location_summaries, path_name, spacing_px):
     """
     If fit then for each x in range make summary
     """
-    N = 21
-    location_summaries = []
-    level = 1
-    for i in range(N):
-        frac = float(i)/(N-1)
-        (x, y) = interp_path(frac, path_lr)
-        summary = {"x":x, "y":y, "level":level, "stats":{}, "frac":frac}        
-        location_summaries.append(summary)
-        
+    path_obj = Path(path_segments)    
     valid_macs = []
+    all_x = np.array([p["frac"] for p in obs_points])
+    distances = get_ds(summary_points, path_obj)
     for mac_id in all_ids:
-        x = np.array([p["frac"] for p in original_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
-        y = np.array([p["stats"][mac_id][1] for p in original_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
+        x = np.array([p["frac"] for p in obs_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
+        y = np.array([p["stats"][mac_id][1] for p in obs_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
         x=x[y>=-90]
         y=y[y>=-90]
 
         if len(x)>30:
             valid_macs.append(mac_id)
             density = len(x)/(max(x)-min(x))
-            res = fit(x,y)
-            for summary in location_summaries:
-                if summary["frac"] >= min(x) and summary["frac"] <= max(x):
-                    #summary["stats"][mac_id] = [density, float(func5(summary["frac"],*res.x)), 0]    
-                    summary["stats"][mac_id] = [1.0, float(func5(summary["frac"],*res)), 0]    
+            res = fit(x,y)            
+            for (i, (distance, path_frac)) in enumerate(distances):
+                if distance<spacing_px/2: # close to a summary point so add to that summary point
+                    summary_dict = location_summaries[i]
+                    if not summary_dict["aggs"].has_key(path_name):
+                        summary_dict["aggs"][path_name] = {}
+                    l = max(0, path_frac-(spacing_px/2)/ path_obj.len)
+                    r = min(1, path_frac+(spacing_px/2)/ path_obj.len)
+                    total = np.sum(np.logical_and(all_x>=l, all_x<=r))
+                    count = np.sum(np.logical_and(x>=l, x<=r))
+                    summary_dict["aggs"][path_name][mac_id] = [total, count, float(func5(path_frac,*res)), 0.0]
                     
-    return (location_summaries, valid_macs)
+    #return (location_summaries, valid_macs)
     
 def fit_path_old():    
     path_lr = [[1076, 614], [1251, 629], [1551,579], [1807,502]]
@@ -291,7 +291,7 @@ def fit_path_old():
     all_ids = list(all_ids)
 
     #plot_fits(all_ids, original_points, macs_tablet, names_tablet)
-    (location_summaries, valid_macs) = create_location_summaries(path_lr, original_points, all_ids)
+    (location_summaries, valid_macs) = update_location_summaries(path_lr, original_points, all_ids)
     
     (old_location_summaries, valid_macs) = process_android.read_summary("C:/Dev/data/greenstone20160513" + "/" + "greenstone_summary_20160513_105108.txt")
     new_location_summaries = location_summaries + old_location_summaries
@@ -341,7 +341,7 @@ def p_dist(x, y, x1, y1, x2, y2):
 """
 Returns matrix same length as summary points
 Each row contains:
-distance to nearest segment | fraction of path corresponding to nearest point | index of closest segment | 
+distance to nearest segment | fraction of path corresponding to nearest point 
 """  
 def get_ds(summary_points, path):
     result = np.zeros((len(summary_points),2))    
@@ -350,11 +350,14 @@ def get_ds(summary_points, path):
         
     return result
     
+    
+    
 """ Creates points from all the paths attempting to not get any that are too 
 close to each other
 """
 def make_summary_points(paths, spacing_px): 
     summary_points = np.zeros((0,2))
+    location_summaries = []    
     for key, path_data in paths.iteritems():
         path = Path(path_data)
         fracs_to_use = []
@@ -362,7 +365,10 @@ def make_summary_points(paths, spacing_px):
         if len(summary_points)==0:            
             points = np.arange(0.5*spacing, 1-0.5*spacing, spacing)
             for point in points:
-                summary_points = np.vstack((summary_points, path.interp(point)))
+                path_point = path.interp(point)
+                summary_points = np.vstack((summary_points, path_point))
+                summary = {"x":path_point[0,0], "y":path_point[0,1], "level":1, "stats":{}, "aggs":{}}        
+                location_summaries.append(summary)
         else:
             distances = get_ds(summary_points, path)
             ind = np.argmin(distances[:,0])
@@ -374,7 +380,10 @@ def make_summary_points(paths, spacing_px):
             if len(fracs_to_use)==0:
                 points = np.arange(0.5*spacing, 1-0.5*spacing, spacing)
                 for point in points:
-                    summary_points = np.vstack((summary_points, path.interp(point)))
+                    path_point = path.interp(point)
+                    summary_points = np.vstack((summary_points, path_point))
+                    summary = {"x":path_point[0,0], "y":path_point[0,1], "level":1, "stats":{}, "aggs":{}}        
+                    location_summaries.append(summary)
             else:                
                 fracs_to_use = np.sort(fracs_to_use)
                 if fracs_to_use[0]>0: fracs_to_use = np.hstack((0,fracs_to_use))
@@ -389,9 +398,12 @@ def make_summary_points(paths, spacing_px):
                         shifts = np.arange(new_space, separation, new_space)                    
                         new_fracs = np.hstack((new_fracs, fracs_to_use[i]+shifts))
                     
-                for frac in new_fracs:
-                   summary_points = np.vstack((summary_points, path.interp(frac)))
-    return summary_points
+                for point in new_fracs:
+                    path_point = path.interp(point)
+                    summary_points = np.vstack((summary_points, path_point))
+                    summary = {"x":path_point[0,0], "y":path_point[0,1], "level":1, "stats":{}, "aggs":{}}        
+                    location_summaries.append(summary)
+    return (summary_points, location_summaries)
     
     
     
@@ -409,7 +421,7 @@ def combine_macs(full_macs, full_names, new_macs, new_names):
     
     
     
-""" Process the whole folder
+""" Process the whole folder into workable data
 """    
 def get_all_data():
     all_data = {}
@@ -457,6 +469,35 @@ def get_all_data():
     return (all_data, full_macs, full_names)
     
     
+    
+""" Fit curves and add interpolated data to the location_summaries
+"""    
+def create_location_summaries(all_data, full_macs, summary_points, location_summaries, spacing_px):
+    colors = ["Red", "orange", "Green", "lightgreen", "Blue", "lightblue"]
+    
+#    for path_name in ["TRUWORTHS/ENT-WW"]:    
+    for path_name in all_data.keys():        
+        data1 = all_data[path_name]
+        print("Processing " + str(len(data1)) + " paths in " + path_name)
+        combined_points = []
+        for (i, path_data) in enumerate(data1):
+            total_time = float(path_data["path"][-1]["offset"])
+            for point in path_data["path"]:
+                frac = point["offset"]/total_time
+                if path_data["direction"] < 0: 
+                    frac = 1-frac
+                point["frac"] = frac
+                point["color"] = colors[i]
+                
+            combined_points+=path_data["path"]
+            
+#        plot_fits(full_macs.keys(), combined_points, full_macs, full_names)
+#        plot_fits([173], combined_points, full_macs, full_names)
+            
+        update_location_summaries(paths[path_name], combined_points, full_macs.keys(), 
+                              summary_points, location_summaries, path_name, spacing_px)
+                              
+
         
 
 
@@ -465,46 +506,47 @@ if __name__ == "__main__":
     # read all the paths to find common summary points
     paths = path_source.greenstone()
     spacing_px = 5*4.2
-    #summary_points = make_summary_points(paths, spacing_px)
-    #(all_data, full_macs, full_names) = get_all_data()
+    (summary_points, location_summaries) = make_summary_points(paths, spacing_px)
+    (all_data, full_macs, full_names) = get_all_data()
+    create_location_summaries(all_data, full_macs, summary_points, location_summaries, spacing_px)
     
-    # for each walk:
-    #    fit the strength for each mac address
-    #    find if any summary points are close to the path, if they are then add reading info
-    #       reading info something like:  time of walk, n obs, p, mean
-    
-    # add fracs and colors
-    colors = ["Red", "orange", "Green", "lightgreen", "Blue", "lightblue"]
-    data1 = all_data["ENT4-PNPLEFT"]
-    combined_points = []
-    for (i, path_data) in enumerate(data1):
-        total_time = float(path_data["path"][-1]["offset"])
-        for point in path_data["path"]:
-            frac = point["offset"]/total_time
-            if path_data["direction"] < 0: 
-                frac = 1-frac
-            point["frac"] = frac
-            point["color"] = colors[i]
-            
-        combined_points+=path_data["path"]
-       
-    plot_fits(full_macs.keys(), combined_points, full_macs, full_names)
-    #plot_fits([32], combined_points, full_macs, full_names)
-    
-    """
-    mac_id = 22
-    x = np.array([p["frac"] for p in combined_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
-    y = np.array([p["stats"][mac_id][1] for p in combined_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
-    x=x[y>=-90]
-    y=y[y>=-90]
-"""
-    
-   
-    
-
-    
-    #fname_macs = "greenstone_20160524_115301_tablet_macs.txt"
-    #fname_walk = "greenstone_20160524_115301_tablet_path.txt"
-    #process_android.get_macs(fname_macs)
+#    colors = ["Red", "orange", "Green", "lightgreen", "Blue", "lightblue"]
+#    
+#    path_name = "TRUWORTHS/ENT-WW"
+#    data1 = all_data[path_name]
+#    combined_points = []
+#    for (i, path_data) in enumerate(data1):
+#        total_time = float(path_data["path"][-1]["offset"])
+#        for point in path_data["path"]:
+#            frac = point["offset"]/total_time
+#            if path_data["direction"] < 0: 
+#                frac = 1-frac
+#            point["frac"] = frac
+#            point["color"] = colors[i]
+#            
+#        combined_points+=path_data["path"]
+#       
+#    #plot_fits(full_macs.keys(), combined_points, full_macs, full_names)
+#    #plot_fits([173], combined_points, full_macs, full_names)
+#    
+#    update_location_summaries(paths[path_name], combined_points, full_macs.keys(), 
+#                              summary_points, location_summaries, path_name, spacing_px)
+#    
+#    
+#    """
+#    mac_id = 22
+#    x = np.array([p["frac"] for p in combined_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
+#    y = np.array([p["stats"][mac_id][1] for p in combined_points if p["stats"].has_key(mac_id) and p.has_key("frac")])
+#    x=x[y>=-90]
+#    y=y[y>=-90]
+#"""
+#    
+#   
+#    
+#
+#    
+#    #fname_macs = "greenstone_20160524_115301_tablet_macs.txt"
+#    #fname_walk = "greenstone_20160524_115301_tablet_path.txt"
+#    #process_android.get_macs(fname_macs)
     
            
