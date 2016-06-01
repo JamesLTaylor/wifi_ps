@@ -25,8 +25,8 @@ def show(all_points_list):
     for (i, points) in enumerate(zip(*all_points_list)):
         ax_upper.cla()
         ax_upper.imshow(upper_img_faded, zorder=0, extent=[0, 2200, 0, 1054])    
-        ax_upper.set_xlim(400, 1100) 
-        ax_upper.set_ylim(800, 400) 
+        ax_upper.set_xlim(400, 1800) 
+        ax_upper.set_ylim(800, 300) 
         #ax_upper.set_xlim(1000, 1850) 
         #ax_upper.set_ylim(750, 450) 
         

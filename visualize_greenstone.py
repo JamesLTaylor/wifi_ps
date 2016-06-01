@@ -13,7 +13,7 @@ def add_points(ax_upper, ax_lower, this_id, name, location_summaries):
     cmap=plt.get_cmap("jet")
     
     
-    for s in location_summaries:
+    for (i, s) in enumerate(location_summaries):
         x = s["x"]
         y = s["y"]        
         level = s["level"]
@@ -41,15 +41,10 @@ def add_points(ax_upper, ax_lower, this_id, name, location_summaries):
             ax_lower.text(x+1, y, s_mu, fontsize=10)
         else:
             ax_upper.add_artist(circle)
-            #ax_upper.plot([x-length, x+length], [y, y], color = "Black")            
+             #ax_upper.plot([x-length, x+length], [y, y], color = "Black")            
             #ax_upper.text(x+1, y, s_mu, fontsize=10)
             
-
-if __name__ == "__main__":
-    folder = "c:\\dev\\data"
-    (location_summaries, valid_macs) = process_android.read_summary(folder + "/" + "greenstone_summary_20160527_122425.txt")            
-    (ap_names, ap_macs) = process_android.get_macs(folder + "/" + "greenstone_macs.txt")
-    
+def show(location_summaries, ap_names, ap_macs):
     datafile = cbook.get_sample_data('C:/Dev/android/WifiRecord/app/src/main/res/drawable/greenstone_lower.png')
     lower_img = imread(datafile)
     lower_img_flip = lower_img[::-1, :, :]
@@ -64,8 +59,8 @@ if __name__ == "__main__":
     #mng.full_screen_toggle()
     
     for (num, name) in ap_names.iteritems():
-        #if num>1:
-            #break
+#        if num>=1:
+#            break
         ax_upper.cla()
         ax_upper.imshow(upper_img_faded, zorder=0, extent=[0, 2200, 0, 1054])    
         ax_upper.set_xlim(400, 1800) 
@@ -79,4 +74,12 @@ if __name__ == "__main__":
         add_points(ax_upper, ax_lower, num, name, location_summaries)
         
         plt.draw()
-        time.sleep(0.25)
+        time.sleep(0.25)         
+            
+
+if __name__ == "__main__":
+    folder = "c:\\dev\\data"
+    (location_summaries, valid_macs) = process_android.read_summary(folder + "/" + "greenstone_summary_20160527_122425.txt")            
+    (ap_names, ap_macs) = process_android.get_macs(folder + "/" + "greenstone_macs.txt")
+    show(location_summaries, ap_names, ap_macs)
+    

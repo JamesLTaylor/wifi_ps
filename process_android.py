@@ -158,7 +158,7 @@ Single obs
 
 Multiple obs
 
-Make it such that no reading gets -100
+Make it such that when tehre are no reading the score is -100
 """   
 def get_diff_old(obs, location, valid_macs):
     score = 0
@@ -187,22 +187,27 @@ def get_diff_old(obs, location, valid_macs):
 def get_diff(obs, location, valid_macs):
     score = 0
     w1 = 1
-    w2 = 1
+    w2 = 2
     w3 = 2
     tol = 10
     weighting = 0
     for loc_mac_key, loc_stats in location.iteritems():
-        weighting += w2 * loc_stats[0]
+        if loc_stats[0]>=0.9:
+            #weighting += loc_stats[0]
+            d = abs(-90-loc_stats[1])
+            d = max(0, d-tol)            
+            weighting += w2 * loc_stats[0] * d
         if loc_mac_key in obs.keys():
-            # in fingerprint and in obs
+            # in fingerprint and in obs            
             d = abs(loc_stats[1] - obs[loc_mac_key][1])
             d = max(0, d-tol)
             score -= w1 * d * loc_stats[0]
         else:
             # in fingerprint but not in obs
-            d = abs(-90-loc_stats[1])
-            d = max(0, d-tol)
-            score -= w2 * loc_stats[0] * d
+            if loc_stats[0]>=0.9:
+                d = abs(-90-loc_stats[1])
+                d = max(0, d-tol)            
+                score -= w2 * loc_stats[0] * d
             
     for obs_mac_key, obs_stats in obs.iteritems():
         if obs_mac_key in valid_macs and obs_mac_key not in location.keys():
@@ -210,7 +215,8 @@ def get_diff(obs, location, valid_macs):
             d = max(0, d-tol)
             score -= w3 * obs_stats[0] * d
             # in obs but not fingerprint
-
+    if weighting<=1e-9:
+        a=10
     return 20*score/weighting      
     
     
@@ -502,6 +508,23 @@ def read_summary(fname):
         
 
 if __name__ == "__main__":
+    folder = "c:\\dev\\data"
+    (location_summaries, valid_macs) = read_summary(folder + "/" + "greenstone_summary_20160527_122425.txt")            
+    (summary_ap_names, summary_ap_macs) = get_macs(folder + "/" + "greenstone_macs.txt")    
+    
+    
+    folder = "C:\\Dev\\wifi_ps\\walks_greenstone"
+    fname_root = "greenstone_20160524_122244_tablet_"
+    (path_ap_names, path_ap_macs) = get_macs(folder + "\\" + fname_root + "macs.txt")    
+    original_points = get_paths(folder, summary_ap_macs, path_ap_macs,
+                                fname = fname_root + "path.txt")
+                                
+    original_points_processed = process_path(original_points, location_summaries, valid_macs)
+    visualize_greenstone_path.show([original_points_processed])
+    
+    
+    """
+    
     folder_tablet1 = "C:/Dev/data/greenstone20160508/tablet"
     folder_tablet2 = "C:/Dev/data/greenstone20160510"
     folder_tablet3 = "C:/Dev/data/greenstone20160511"
@@ -552,7 +575,7 @@ if __name__ == "__main__":
     #diff = get_diff(summaries1[0]["stats"], location_summaries[0]["stats"])
     #diffs = [get_diff(summaries1[1]["stats"], location_summary["stats"]) for location_summary in location_summaries]
     
-
+"""
         
 
 
