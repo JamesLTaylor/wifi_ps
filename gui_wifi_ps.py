@@ -6,8 +6,12 @@ from PIL import ImageTk, Image
 import wifi_readings
 import datetime
 import json
+import copy
 
-class Application(ttk.Frame):
+class WifiFrame(ttk.Frame):
+    
+    FOREGROUND_TAG = "FOREGROUND_TAG"
+    
     
     def __init__(self, root):
         ttk.Frame.__init__(self, root)
@@ -26,9 +30,10 @@ class Application(ttk.Frame):
         self.node_top = 0
         self.line_top = 0
         self.circle_dragging = False
+        self.print_next_click = False
         
         
-    def set_constants(self):
+    def set_constants(self):        
         self.images = {"Home":
                           {"Downstairs": "C:\\Dev\\wifi_ps\\floor_plans\\house_lower.gif",
                            "Upstairs": "C:\\Dev\\wifi_ps\\floor_plans\\house_upper.gif"},
@@ -71,7 +76,7 @@ class Application(ttk.Frame):
         #self.img_width = self.img.width()
         #self.img_height = self.img.height()
         #self.image_on_canvas = self.canvas.create_image(0,0,image=self.img, anchor="nw", tags='img')
-        self.image_on_canvas = self.canvas.create_image(0,0,image=None, anchor="nw", tags='img')
+        self.image_on_canvas = self.canvas.create_image(0,0,image=None, anchor="nw", tag="Image")
         #self.canvas.config(scrollregion=self.canvas.bbox(tk.ALL))
         self.canvas.bind("<Button-1>", self.canvas_btn_down)
         self.canvas.bind("<B1-Motion>", self.canvas_drag)
@@ -92,10 +97,20 @@ class Application(ttk.Frame):
         btn_id.grid(row = 0, column=1, padx=5, pady=10, sticky=tk.W)
         btn_new_path = tk.Button(bottom_frame, text="New path",command=self.new_path)
         btn_new_path.grid(row = 0, column=2, padx=5, pady=10, sticky=tk.W)
-        btn_new_path = tk.Button(bottom_frame, text="Load JSON",command=self.dump_json)
+        btn_new_path = tk.Button(bottom_frame, text="Load Map",command=self.load_map)
         btn_new_path.grid(row = 0, column=3, padx=5, pady=10, sticky=tk.W)
-        btn_new_path = tk.Button(bottom_frame, text="Dump JSON",command=self.dump_json)
+        btn_new_path = tk.Button(bottom_frame, text="Save Map",command=self.save_map)
         btn_new_path.grid(row = 0, column=4, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="Show Shops",command=self.show_shops)
+        btn_new_path.grid(row = 0, column=5, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="Save Shops",command=self.save_shops)
+        btn_new_path.grid(row = 0, column=6, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="Clear",command=self.clear)
+        btn_new_path.grid(row = 0, column=7, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="Set location",command=self.set_location)
+        btn_new_path.grid(row = 0, column=8, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="Find route",command=self.find_route)
+        btn_new_path.grid(row = 0, column=9, padx=5, pady=10, sticky=tk.W)
         
         top_frame.grid(row=0, column=0, sticky=tk.W)
         canvas_frame.grid(row=1, column=0, sticky=tk.N+tk.S+tk.E+tk.W)
@@ -129,6 +144,11 @@ class Application(ttk.Frame):
             
         
     def set_new_image(self):
+        self.clear()
+        if self.level_var.get()=="Upper Level":
+            self.level = 1
+        else:
+            self.level = 0
         self.img_filename = self.images[self.location_var.get()][self.level_var.get()]
         self.img = ImageTk.PhotoImage(file=self.img_filename)        
         self.img_width = self.img.width()
@@ -140,6 +160,12 @@ class Application(ttk.Frame):
     def on_closing(self):
         root.destroy()
         #sys.exit()
+        
+        
+    def clear(self):
+        self.canvas.delete(WifiFrame.FOREGROUND_TAG)
+        self.lines = {}
+        self.nodes = {}
         
     def canvas_btn_down(self, event):
         print("canvas clicked")
@@ -159,32 +185,45 @@ class Application(ttk.Frame):
         self.canvas.xview('moveto',new_x)
         self.canvas.yview('moveto',new_y)  
         
+        
+    def add_circle_item(self, node_num, x, y, color, r=4):
+        circle_item = self.canvas.create_oval(x-r, y-r, x+r, y+r, fill=color, tag=WifiFrame.FOREGROUND_TAG)
+        
+        self.canvas.tag_bind(circle_item, '<ButtonPress-1>', 
+                             lambda event, i=node_num : self.circle_btn_down(event, i))
+        self.canvas.tag_bind(circle_item, "<B1-Motion>", 
+                             self.circle_drag)                                 
+        self.canvas.tag_bind(circle_item, '<ButtonRelease-1>', 
+                             lambda event, i=node_num : self.circle_btn_up(event, i))
+        self.canvas.tag_bind(circle_item, '<Button-3>', 
+                             lambda event, i=node_num : self.circle_right_click(event, i))
+        return circle_item
+        
     def add_node(self, x, y):
         new_node_num = self.node_top
         self.node_top += 1
             
         self.point_selected = True
         
-        new_node = {"x":x,"y":y, "to":[]}
+        if self.level_var.get()=="Upper Level":
+            level=1
+        else: 
+            level=0
+        new_node = {"x":x,"y":y, "to":[],"level":level}
         self.nodes[new_node_num] = new_node
         self.selected_node = new_node_num
+        circle_item = self.add_circle_item(new_node_num, new_node["x"], new_node["y"], "red")        
         
-        circle_item = self.canvas.create_oval(new_node["x"]-4, new_node["y"]-4, new_node["x"]+4, new_node["y"]+4, fill="red")
-        
-        self.canvas.tag_bind(circle_item, '<ButtonPress-1>', 
-                             lambda event, i=new_node_num : self.circle_btn_down(event, i))
-        self.canvas.tag_bind(circle_item, "<B1-Motion>", 
-                             self.circle_drag)                                 
-        self.canvas.tag_bind(circle_item, '<ButtonRelease-1>', 
-                             lambda event, i=new_node_num : self.circle_btn_up(event, i))
-        self.canvas.tag_bind(circle_item, '<Button-3>', 
-                             lambda event, i=new_node_num : self.circle_right_click(event, i))
         new_node["circle_item"]=circle_item
         
         return new_node_num
         
         
     def canvas_drag_end(self, event):
+        if self.print_next_click:
+            print("{},{},{}".format(self.canvas.canvasx(event.x),self.canvas.canvasy(event.y),self.level)) 
+            self.print_next_click = False
+            return
         if (datetime.datetime.now()-self.last_press).total_seconds()<0.2:
             print("Too soon, don't process")
             return
@@ -208,19 +247,6 @@ class Application(ttk.Frame):
                 self.add_line_between(old_node_num, new_node_num)
                 
             
-            """           
-            
-            self.latest_x = canvas.canvasx(event.x)
-            self.latest_y = canvas.canvasy(event.y)
-            self.latestpoint = self.canvas.create_oval(self.latest_x-4, self.latest_y-4, self.latest_x+4, self.latest_y+4, fill="red")                
-            self.dots.append(self.latestpoint)
-            #print("location set to: " + str((self.latest_x, self.latest_y)))            
-            print("[" + str(self.latest_x) + "," + str(self.latest_y) + "],")            
-            #else:
-            #    tkMessageBox.showwarning("Duplicate point", 
-            #    "A point is already selected for this floorplan.\nPlease record it before selecting another")
-            """
-            
     def add_line_between(self, node_from, node_to):
         
         line_num = self.line_top
@@ -236,9 +262,11 @@ class Application(ttk.Frame):
         new_x2 = x1 + 0.9*(x2-x1)
         new_y2 = y1 + 0.9*(y2-y1)
         
-        line_item = self.canvas.create_line(new_x1, new_y1, new_x2, new_y2, width=3)
+        line_item = self.canvas.create_line(new_x1, new_y1, new_x2, new_y2, width=3, tag=WifiFrame.FOREGROUND_TAG)
         self.canvas.tag_bind(line_item, '<Button-1>', 
                              lambda event, i=line_num : self.line_btn(event, i))
+        self.canvas.tag_bind(line_item, '<Button-3>', 
+                             lambda event, i=line_num : self.line_right_click(event, i))                             
         
         new_line = {"node1":node_from, "node2":node_to, "line_item":line_item}
         self.lines[line_num] = new_line
@@ -246,8 +274,7 @@ class Application(ttk.Frame):
             
     def circle_btn_down(self, event, i):
         print("circle btn down:" + str(i))  
-        self.circle_dragging_ind = i
-        
+        self.circle_dragging_ind = i        
         return "break"
         
     def circle_drag(self, event):
@@ -302,6 +329,9 @@ class Application(ttk.Frame):
             else:
                 # add a line connection
                 self.add_line_between(self.selected_node, i)
+                self.nodes[self.selected_node]["to"].append(i)
+                self.nodes[i]["to"].append(self.selected_node)
+                
                 last_circle = self.nodes[self.selected_node]
                 self.canvas.itemconfig(last_circle["circle_item"], fill='gray')
                 self.selected_node = i
@@ -312,6 +342,11 @@ class Application(ttk.Frame):
         
         
     
+    """ 
+    Remove the circle
+    Remove all references to that circle
+    If the circle was between exactly two nodes reconnect those two with a new line
+    """
     def circle_right_click(self, event, i):
         last_circle = self.nodes[i]["circle_item"]
         if i==self.selected_node:
@@ -341,6 +376,8 @@ class Application(ttk.Frame):
             self.lines.pop(num)
         if len(outer_nodes)==2:
             self.add_line_between(*outer_nodes)
+            self.nodes[outer_nodes[0]]["to"].append(outer_nodes[1])
+            self.nodes[outer_nodes[1]]["to"].append(outer_nodes[0])
                 
                
                 
@@ -350,24 +387,39 @@ class Application(ttk.Frame):
         print("line clicked:" + str(i))
         print(event.widget)
         self.last_press = datetime.datetime.now()
-
-        last_circle = self.nodes[self.selected_node]["circle_item"]
-        self.canvas.itemconfig(last_circle, fill='gray')
-        self.selected_node = None        
+        
+        if not self.selected_node is None:
+            last_circle = self.nodes[self.selected_node]["circle_item"]
+            self.canvas.itemconfig(last_circle, fill='gray')
+            self.selected_node = None        
         
         new_node_num = self.add_node(self.canvas.canvasx(event.x),self.canvas.canvasy(event.y))
         line = self.lines[i]
         self.add_line_between(line["node1"], new_node_num)
         self.add_line_between(line["node2"], new_node_num)
-        self.canvas.delete(line["line_item"])
-        self.lines.pop(i)
+        
+        self.nodes[line["node1"]]["to"].remove(line["node2"])
+        self.nodes[line["node1"]]["to"].append(new_node_num)
+        self.nodes[line["node2"]]["to"].remove(line["node1"])
+        self.nodes[line["node2"]]["to"].append(new_node_num)
+        self.nodes[new_node_num]["to"] = [line["node1"], line["node2"]]
         
         last_circle = self.nodes[self.selected_node]["circle_item"]
         self.canvas.itemconfig(last_circle, fill='gray')
         self.selected_node = None  
-        
+
+        self.canvas.delete(line["line_item"])
+        self.lines.pop(i)        
                 
         return "break"
+        
+    def line_right_click(self, event, i):
+        line = self.lines[i]
+        self.nodes[line["node1"]]["to"].remove(line["node2"])
+        self.nodes[line["node2"]]["to"].remove(line["node1"])
+        self.canvas.delete(line["line_item"])
+        self.lines.pop(i)
+        
 
     def record(self, *args):  
         if self.point_selected:
@@ -389,13 +441,137 @@ class Application(ttk.Frame):
         self.dots = []
         self.set_new_image()
         
-    def load_json(self):
-        pass        
+    def load_map(self):
+        fname = "C:\\Dev\\wifi_ps\\mall_data\\map.json"
+        f = open(fname,'r')
+        self.nodes = json.loads(f.read()) 
+        f.close()
         
-    def dump_json(self):
-        print("##########################################")
-        print(json.dumps(self.nodes))
-        print("##########################################")
+        for key in self.nodes.keys():
+            int_key = int(key)
+            self.nodes[int_key] = self.nodes.pop(key)
+            
+        max_key = 0            
+        if self.level_var.get()=="Upper Level":
+            display_level=1
+        else: 
+            display_level=0
+            
+        for (key, circle) in self.nodes.iteritems():
+            if (key>max_key):
+                max_key = key
+            escalator = False
+            if circle["level"]==display_level:
+                for to in circle["to"]:
+                    if not self.nodes[to]["level"]==display_level:
+                        escalator=True
+                
+                if escalator:
+                    circle_item = self.add_circle_item(key, circle["x"], circle["y"], "gray", r=8)                
+                else:
+                    circle_item = self.add_circle_item(key, circle["x"], circle["y"], "gray")
+                circle["circle_item"]=circle_item
+                
+                for to in circle["to"]:
+                    if to<key and self.nodes[to]["level"]==display_level:
+                        self.add_line_between(key, to)
+            
+        self.node_top = max_key+1
+        self.selected_node=None
+        
+    def save_map(self):
+        fname = "C:\\Dev\\wifi_ps\\mall_data\\map.json"
+        save_nodes = copy.deepcopy(self.nodes)
+        for (key, value) in save_nodes.iteritems():
+            value.pop("circle_item",None)
+        f = open(fname,'w')
+        f.write(json.dumps(save_nodes, sort_keys=True, indent=4, separators=(',', ': ')))        
+        f.close()        
+        
+    def show_shops(self):
+        fname = "C:\\Dev\\wifi_ps\\mall_data\\ShopLocations.csv"
+        f = open(fname)
+        lines = f.readlines()
+        f.close()
+        self.shops = []
+
+        for (i, line) in enumerate(lines):
+            cols = line[:-1].split(',')
+            try:
+                x = float(cols[3])
+                y = float(cols[4])                
+            except:
+                x = 10
+                y = 10  
+#            if cols[1][0]=="U":
+#                level = 1
+#            else:
+#                level = 0
+            level = int(float(cols[5]))
+            shop = {"name":cols[0], "alt":cols[2], "number":cols[1], "x":x,"y":y,"level":level}
+            
+            if ( (self.level_var.get()=="Upper Level" and level==1) or 
+                 (self.level_var.get()=="Lower Level" and level==0)):
+             
+                circle_item = self.canvas.create_oval(x-4, y-4, x+4, y+4, fill="blue", tag=WifiFrame.FOREGROUND_TAG)
+                text_item = self.canvas.create_text(x+2, y+2, text=(shop["name"]+","+shop["number"]+","+shop["alt"]), 
+                                                    anchor=tk.NW, tag=WifiFrame.FOREGROUND_TAG)
+                
+                self.canvas.tag_bind(circle_item, '<ButtonPress-1>', 
+                             lambda event, i=i : self.circle_btn_down(event, i))
+                self.canvas.tag_bind(circle_item, "<B1-Motion>", 
+                             self.shop_drag)                                 
+                self.canvas.tag_bind(circle_item, '<ButtonRelease-1>', 
+                             lambda event, i=i : self.circle_btn_up(event, i))
+            else:                
+                circle_item = None
+                text_item = None
+                
+            shop["circle_item"] = circle_item
+            shop["text_item"] = text_item
+            self.shops.append(shop)
+                               
+            
+            
+            
+    def shop_btn_up(self, event, i):
+        self.last_press = datetime.datetime.now()
+        self.circle_dragging = False
+        return
+            
+            
+    def shop_drag(self, event):
+        self.circle_dragging = True
+        self.dragging = False
+       
+        this_circle = self.shops[self.circle_dragging_ind]["circle_item"]
+        this_text = self.shops[self.circle_dragging_ind]["text_item"]
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        self.canvas.coords(this_circle, x-4, y-4, x+4, y+4)
+        self.canvas.coords(this_text, x+2, y+2)
+        self.shops[self.circle_dragging_ind]["x"] = x
+        self.shops[self.circle_dragging_ind]["y"] = y
+
+        
+    def save_shops(self):
+        fname = "C:\\Dev\\wifi_ps\\mall_data\\ShopLocations.csv"
+        f = open(fname,'w')
+        for shop in self.shops:
+            f.write("{},{},{},{:.1f},{:.1f},{}\n".format(shop["name"], shop["number"], shop["alt"],
+                    shop["x"], shop["y"], shop["level"]))
+        f.close()
+        
+    def set_location(self):
+        self.print_next_click = True
+        
+    def find_route(self):
+        start = []
+        
+
+                
+                
+            
         
 
 if __name__ == "__main__":
@@ -405,7 +581,7 @@ if __name__ == "__main__":
     root = tk.Tk()
     root.title("Wifi positioning system")
     
-    app = Application(root)
+    app = WifiFrame(root)
     root.geometry("1000x700")
     root.update()
     
