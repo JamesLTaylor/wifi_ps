@@ -130,53 +130,6 @@ class Drawer(object):
         if self.counter<len(self.all_ids):
             self.draw()
             
-class Path(object):
-    def __init__(self, path_data):
-        self.p = np.array(path_data)
-        self.len = np.sum(np.sqrt((self.p[1:,0]-self.p[:-1,0])**2 + (self.p[1:,1]-self.p[:-1,1])**2))
-        self.cum_length = np.cumsum(np.append([0], np.sqrt((self.p[1:,0]-self.p[:-1,0])**2 + (self.p[1:,1]-self.p[:-1,1])**2)))
-        self.cum_frac = self.cum_length/self.cum_length[-1]
-        
-    def interp(self, frac):
-        if frac >= (1-1e-9):
-            return np.array([[self.p[-1][0], self.p[-1][1]]])
-        elif frac <= (1e-9):
-            return np.array([[self.p[0][0], self.p[0][1]]])
-            
-        left_ind = np.where(self.cum_frac<=frac)[0][-1]
-        w = (frac - self.cum_frac[left_ind])/(self.cum_frac[left_ind+1]-self.cum_frac[left_ind])
-        
-        x = self.p[left_ind, 0] + w * (self.p[left_ind+1, 0] - self.p[left_ind, 0])
-        y = self.p[left_ind, 1] + w * (self.p[left_ind+1, 1] - self.p[left_ind, 1])
-    
-        return np.array([[x,y]])
-    
-    def reverse_interp(self, x, y):
-        for i in range(len(self.p)-1):        
-            if (x>=self.p[i,0] and x<=self.p[i+1,0]) or (x>=self.p[i+1,0] and x<=self.p[i,0]):
-                if (y>=self.p[i,1] and y<=self.p[i+1,1]) or (y>=self.p[i+1,1] and y<=self.p[i,1]):
-                    dx = x - self.p[i,0]
-                    dy = y - self.p[i,1]                    
-                    frac = self.cum_frac[i] + np.sqrt(dx*dx + dy*dy)/self.len
-                    return frac
-        raise Exception("supplied point does not lie on the path")
-        
-    def closest(self, x, y):
-        d = 1e9   
-        for i in range(len(self.p)-1):
-            (new_d, new_close_x, new_close_y) = p_dist(x, y, self.p[i,0], self.p[i,1], self.p[i+1,0], self.p[i+1,1])
-            frac = self.reverse_interp(new_close_x, new_close_y)
-            if new_d<d:
-                d = new_d
-                close_x = new_close_x
-                close_y = new_close_y                
-                
-        frac = self.reverse_interp(close_x, close_y)
-        return (d, frac)
-            
-        
-               
-            
     
             
 def interp_path(frac, path_lr):

@@ -7,6 +7,7 @@ import wifi_readings
 import datetime
 import json
 import copy
+import route_finding
 
 class WifiFrame(ttk.Frame):
     
@@ -17,6 +18,8 @@ class WifiFrame(ttk.Frame):
         ttk.Frame.__init__(self, root)
         root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.set_constants()
+        self.load_map()
+        self.load_shops()
         self.setup()
         root.grid_columnconfigure(0,weight=1)        
         root.grid_rowconfigure(0,weight=1)
@@ -30,7 +33,10 @@ class WifiFrame(ttk.Frame):
         self.node_top = 0
         self.line_top = 0
         self.circle_dragging = False
-        self.print_next_click = False
+        self.next_click_is_start = False
+        self.next_click_is_end = False
+
+
         
         
     def set_constants(self):        
@@ -58,6 +64,15 @@ class WifiFrame(ttk.Frame):
         self.level_option = tk.OptionMenu(top_frame, self.level_var, *values)
         self.level_option.grid(row = 0, column=2, padx=5, pady=10, sticky=tk.W)
         self.level_var.trace("w", self.level_change)
+        
+        self.shop_var = tk.StringVar(top_frame)
+        values = [shop["name"] for shop in self.shops]
+        values = set(values)
+        values = list(values)
+        values.sort()
+        self.shop_var.set(values[0])
+        self.shop_option = tk.OptionMenu(top_frame, self.shop_var, *values)
+        self.shop_option.grid(row = 0, column=3, padx=5, pady=10, sticky=tk.W)
         
         # Canvas frame
         canvas_frame = tk.Frame(self)
@@ -97,7 +112,7 @@ class WifiFrame(ttk.Frame):
         btn_id.grid(row = 0, column=1, padx=5, pady=10, sticky=tk.W)
         btn_new_path = tk.Button(bottom_frame, text="New path",command=self.new_path)
         btn_new_path.grid(row = 0, column=2, padx=5, pady=10, sticky=tk.W)
-        btn_new_path = tk.Button(bottom_frame, text="Load Map",command=self.load_map)
+        btn_new_path = tk.Button(bottom_frame, text="Show Map",command=self.show_map)
         btn_new_path.grid(row = 0, column=3, padx=5, pady=10, sticky=tk.W)
         btn_new_path = tk.Button(bottom_frame, text="Save Map",command=self.save_map)
         btn_new_path.grid(row = 0, column=4, padx=5, pady=10, sticky=tk.W)
@@ -107,10 +122,14 @@ class WifiFrame(ttk.Frame):
         btn_new_path.grid(row = 0, column=6, padx=5, pady=10, sticky=tk.W)
         btn_new_path = tk.Button(bottom_frame, text="Clear",command=self.clear)
         btn_new_path.grid(row = 0, column=7, padx=5, pady=10, sticky=tk.W)
-        btn_new_path = tk.Button(bottom_frame, text="Set location",command=self.set_location)
+        btn_new_path = tk.Button(bottom_frame, text="Set start",command=self.set_start)
         btn_new_path.grid(row = 0, column=8, padx=5, pady=10, sticky=tk.W)
-        btn_new_path = tk.Button(bottom_frame, text="Find route",command=self.find_route)
+        btn_new_path = tk.Button(bottom_frame, text="Set end",command=self.set_end)
         btn_new_path.grid(row = 0, column=9, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="Find route",command=self.find_route)
+        btn_new_path.grid(row = 0, column=10, padx=5, pady=10, sticky=tk.W)
+        btn_new_path = tk.Button(bottom_frame, text="Find bathroom",command=self.find_bathroom)
+        btn_new_path.grid(row = 0, column=11, padx=5, pady=10, sticky=tk.W)
         
         top_frame.grid(row=0, column=0, sticky=tk.W)
         canvas_frame.grid(row=1, column=0, sticky=tk.N+tk.S+tk.E+tk.W)
@@ -164,8 +183,8 @@ class WifiFrame(ttk.Frame):
         
     def clear(self):
         self.canvas.delete(WifiFrame.FOREGROUND_TAG)
-        self.lines = {}
-        self.nodes = {}
+        self.load_map()
+
         
     def canvas_btn_down(self, event):
         print("canvas clicked")
@@ -188,6 +207,7 @@ class WifiFrame(ttk.Frame):
         
     def add_circle_item(self, node_num, x, y, color, r=4):
         circle_item = self.canvas.create_oval(x-r, y-r, x+r, y+r, fill=color, tag=WifiFrame.FOREGROUND_TAG)
+        #self.canvas.create_text(x+2, y+2, text=(node_num), anchor=tk.NW, tag=WifiFrame.FOREGROUND_TAG)
         
         self.canvas.tag_bind(circle_item, '<ButtonPress-1>', 
                              lambda event, i=node_num : self.circle_btn_down(event, i))
@@ -198,6 +218,7 @@ class WifiFrame(ttk.Frame):
         self.canvas.tag_bind(circle_item, '<Button-3>', 
                              lambda event, i=node_num : self.circle_right_click(event, i))
         return circle_item
+        
         
     def add_node(self, x, y):
         new_node_num = self.node_top
@@ -220,9 +241,21 @@ class WifiFrame(ttk.Frame):
         
         
     def canvas_drag_end(self, event):
-        if self.print_next_click:
-            print("{},{},{}".format(self.canvas.canvasx(event.x),self.canvas.canvasy(event.y),self.level)) 
-            self.print_next_click = False
+        if self.next_click_is_start:
+            x = self.canvas.canvasx(event.x)
+            y = self.canvas.canvasy(event.y)
+            self.canvas.create_rectangle(x-4, y-4, x+4, y+4, fill="green", tag=WifiFrame.FOREGROUND_TAG)
+            self.start = [x,y,self.level]
+            self.next_click_is_start = False
+            print("{},{},{}".format(x, y, self.level)) 
+            return
+        if self.next_click_is_end:
+            x = self.canvas.canvasx(event.x)
+            y = self.canvas.canvasy(event.y)
+            self.canvas.create_rectangle(x-4, y-4, x+4, y+4, fill="black", tag=WifiFrame.FOREGROUND_TAG)
+            self.end = [x,y,self.level]
+            self.next_click_is_end = False
+            print("{},{},{}".format(x, y, self.level)) 
             return
         if (datetime.datetime.now()-self.last_press).total_seconds()<0.2:
             print("Too soon, don't process")
@@ -441,7 +474,8 @@ class WifiFrame(ttk.Frame):
         self.dots = []
         self.set_new_image()
         
-    def load_map(self):
+        
+    def load_map(self):    
         fname = "C:\\Dev\\wifi_ps\\mall_data\\map.json"
         f = open(fname,'r')
         self.nodes = json.loads(f.read()) 
@@ -449,8 +483,10 @@ class WifiFrame(ttk.Frame):
         
         for key in self.nodes.keys():
             int_key = int(key)
-            self.nodes[int_key] = self.nodes.pop(key)
+            self.nodes[int_key] = self.nodes.pop(key)        
             
+        
+    def show_map(self):            
         max_key = 0            
         if self.level_var.get()=="Upper Level":
             display_level=1
@@ -488,7 +524,7 @@ class WifiFrame(ttk.Frame):
         f.write(json.dumps(save_nodes, sort_keys=True, indent=4, separators=(',', ': ')))        
         f.close()        
         
-    def show_shops(self):
+    def load_shops(self):
         fname = "C:\\Dev\\wifi_ps\\mall_data\\ShopLocations.csv"
         f = open(fname)
         lines = f.readlines()
@@ -509,12 +545,15 @@ class WifiFrame(ttk.Frame):
 #                level = 0
             level = int(float(cols[5]))
             shop = {"name":cols[0], "alt":cols[2], "number":cols[1], "x":x,"y":y,"level":level}
+
+            self.shops.append(shop)
             
-            if ( (self.level_var.get()=="Upper Level" and level==1) or 
-                 (self.level_var.get()=="Lower Level" and level==0)):
-             
-                circle_item = self.canvas.create_oval(x-4, y-4, x+4, y+4, fill="blue", tag=WifiFrame.FOREGROUND_TAG)
-                text_item = self.canvas.create_text(x+2, y+2, text=(shop["name"]+","+shop["number"]+","+shop["alt"]), 
+            
+    def show_shops(self):
+        for (i, shop) in enumerate(self.shops):
+            if (self.level == shop["level"]):             
+                circle_item = self.canvas.create_oval(shop["x"]-4, shop["y"]-4, shop["x"]+4, shop["y"]+4, fill="blue", tag=WifiFrame.FOREGROUND_TAG)
+                text_item = self.canvas.create_text(shop["x"]+2, shop["y"]+2, text=(shop["name"]+","+shop["number"]+","+shop["alt"]), 
                                                     anchor=tk.NW, tag=WifiFrame.FOREGROUND_TAG)
                 
                 self.canvas.tag_bind(circle_item, '<ButtonPress-1>', 
@@ -529,8 +568,6 @@ class WifiFrame(ttk.Frame):
                 
             shop["circle_item"] = circle_item
             shop["text_item"] = text_item
-            self.shops.append(shop)
-                               
             
             
             
@@ -562,11 +599,42 @@ class WifiFrame(ttk.Frame):
                     shop["x"], shop["y"], shop["level"]))
         f.close()
         
-    def set_location(self):
-        self.print_next_click = True
+    def set_start(self):
+        self.next_click_is_start = True
+        
+    def set_end(self):
+        self.next_click_is_end = True
+        
+    def find_bathroom(self):
+        self.shop_var.set("Bathroom")
+        self.find_route()
         
     def find_route(self):
-        start = []
+        candidates = []
+        shop_name = self.shop_var.get()
+        best_dist = 1e9
+        best_route = []
+        
+        
+        for (i, shop) in enumerate(self.shops):
+            if shop["name"]==shop_name:
+                candidates.append(i)
+        for candidate in candidates:        
+            end_shop = self.shops[candidate]
+            end_point = [end_shop["x"], end_shop["y"], end_shop["level"]]
+            (distance, route) = route_finding.get_route(self.nodes, self.start, end_point)
+            if distance<best_dist:
+                best_dist = distance
+                best_route = route
+            
+        for i in range(len(best_route)-1):
+            if (self.level == self.nodes[best_route[i]]["level"] and
+                self.level == self.nodes[best_route[i+1]]["level"]):
+                       
+                self.canvas.create_line(self.nodes[best_route[i]]["x"],  self.nodes[best_route[i]]["y"], 
+                                        self.nodes[best_route[i+1]]["x"], self.nodes[best_route[i+1]]["y"], 
+                                        width=3, tag=WifiFrame.FOREGROUND_TAG, fill="red")
+        
         
 
                 
