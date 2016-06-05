@@ -681,8 +681,8 @@ class WifiFrame(ttk.Frame):
                                         width=3, tag=WifiFrame.FOREGROUND_TAG, fill="red")
         
     def load_paths(self):
-        self.paths = path_source.greenstone()
-        self.paths_new = path_source.greenstone_new()
+        self.paths = path_source.greenstone_old()
+        self.paths_new = path_source.greenstone()
         
 
                 

@@ -1,6 +1,6 @@
 import numpy as np
 
-def greenstone_new():
+def greenstone():
     paths = {}
     paths["ENT4-PNPLEFT"] = [[659.0,382.0,1], [892.0,502.0,1]]    
     paths["PNPLEFT-PNPCENTER"] = [[892.0,502.0,1], [1089.0,511.0,1]]    
@@ -18,7 +18,7 @@ def greenstone_new():
     paths["HUB-ENT4/PEP"] = [[380.0,492.0,1], [635.0,376.0,1]]
     return paths
 
-def greenstone():
+def greenstone_old():
     paths = {};
     paths["ENT4-PNPLEFT"] = np.array([[659.0,382.0],
     [647.0,419.0],

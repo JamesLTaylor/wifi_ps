@@ -8,8 +8,10 @@ import visualize_greenstone_path
 import sys
 import os
 import math
-folder = "C:\\Dev\\wifi_ps\\walks_greenstone"
-sys.path.append(folder)
+
+import route_finding
+
+sys.path.append(".\\mall_data")
 import path_source
 
 
@@ -161,12 +163,13 @@ def plot_fits(all_ids, original_points, macs_tablet, names_tablet):
     
     
     
-def update_location_summaries(path_segments, obs_points, all_ids, summary_points, location_summaries, path_name, spacing_px):
+def update_location_summaries(path_points, obs_points, all_ids, summary_points, location_summaries, path_name, spacing_px, px_p_m):
     """
     If fit then for each x in range make summary
     """
-    path_obj = Path(path_segments)    
-    valid_macs = []
+    map_nodes = route_finding.load_map()
+    path_obj = route_finding.Path(route_finding.convert_points_to_np(map_nodes, path_points), px_p_m)
+ 
     all_x = np.array([p["frac"] for p in obs_points])
     distances = get_ds(summary_points, path_obj)
     for mac_id in all_ids:
@@ -175,7 +178,6 @@ def update_location_summaries(path_segments, obs_points, all_ids, summary_points
         x=x[y>=-90]
         y=y[y>=-90]
 
-        add_empty = False
         if len(x)>30:
             res = fit(x,y)
         else:
@@ -285,11 +287,12 @@ def get_ds(summary_points, path):
 """ Creates points from all the paths attempting to not get any that are too 
 close to each other
 """
-def make_summary_points(paths, spacing_px): 
+def make_summary_points(path_points_map, spacing_px, px_p_m): 
     summary_points = np.zeros((0,2))
     location_summaries = []    
-    for key, path_data in paths.iteritems():
-        path = Path(path_data)
+    map_nodes = route_finding.load_map()
+    for key, path_point_data in path_points_map.iteritems():
+        path = route_finding.Path(route_finding.convert_points_to_np(map_nodes, path_point_data), px_p_m)
         fracs_to_use = []
         spacing = spacing_px/path.len
         if len(summary_points)==0:            
@@ -356,7 +359,8 @@ def combine_macs(full_macs, full_names, new_macs, new_names):
 def get_all_data():
     all_data = {}
     full_macs = {}
-    full_names = {}    
+    full_names = {}  
+    folder = "C:\\Dev\\wifi_ps\\walks_greenstone"
     allfiles = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]    
     for filename in allfiles:       
         parts = filename[:-4].split("_")
@@ -402,7 +406,7 @@ def get_all_data():
     
 """ Fit curves and add interpolated data to the location_summaries
 """    
-def create_location_summaries(all_data, full_macs, summary_points, location_summaries, spacing_px):
+def create_location_summaries(path_points_map, all_data, full_macs, summary_points, location_summaries, spacing_px, px_p_m):
     colors = ["Red", "orange", "Green", "lightgreen", "Blue", "lightblue"]
     
 #    for path_name in ["TRUWORTHS/ENT-WW"]:    
@@ -424,8 +428,8 @@ def create_location_summaries(all_data, full_macs, summary_points, location_summ
 #        plot_fits(full_macs.keys(), combined_points, full_macs, full_names)
 #        plot_fits([173], combined_points, full_macs, full_names)
             
-        update_location_summaries(paths[path_name], combined_points, full_macs.keys(), 
-                              summary_points, location_summaries, path_name, spacing_px)
+        update_location_summaries(path_points_map[path_name], combined_points, full_macs.keys(), 
+                              summary_points, location_summaries, path_name, spacing_px, px_p_m)
 
 
 def convert_aggs_to_stats():
@@ -449,12 +453,13 @@ def convert_aggs_to_stats():
 if __name__ == "__main__":
     
     # read all the paths to find common summary points
-#    paths = path_source.greenstone()
-#    spacing_px = 5*4.2
-#    (summary_points, location_summaries) = make_summary_points(paths, spacing_px)
-#    (all_data, full_macs, full_names) = get_all_data()
-#    create_location_summaries(all_data, full_macs, summary_points, location_summaries, spacing_px)
+    path_points_map = path_source.greenstone()
+    px_p_m = 4.2
+    spacing_px = 5*px_p_m
+    #(summary_points, location_summaries) = make_summary_points(path_points_map, spacing_px, px_p_m)
+    #(all_data, full_macs, full_names) = get_all_data()
+    create_location_summaries(path_points_map, all_data, full_macs, summary_points, location_summaries, spacing_px, px_p_m)
 #    
-    #convert_aggs_to_stats()
-    #process_android.write_summary("c:\\dev\\data", "greenstone", location_summaries)
+    convert_aggs_to_stats()
+    process_android.write_summary("c:\\dev\\data", "greenstone", location_summaries)
     process_android.write_macs("c:\\dev\\data", "greenstone", full_macs, full_names)

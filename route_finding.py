@@ -8,8 +8,7 @@ distance between a point and a line segment
 
 http://stackoverflow.com/a/6853926/5890940   
 """ 
-def p_dist(x, y, x1, y1, x2, y2):
-
+def p_dist(x, y, x1, y1, x2, y2):  
   A = x - x1;
   B = y - y1;
   C = x2 - x1;
@@ -67,10 +66,16 @@ class Path(object):
                     frac = self.cum_frac[i] + np.sqrt(dx*dx + dy*dy)/self.len
                     return frac
         raise Exception("supplied point does not lie on the path")
-        
+
+     
+    """ find the point on the path closest to that supplied.
+    
+    Returns: (d, frac)
+
+    """
     def closest(self, x, y):
         d = 1e9   
-        for i in range(len(self.p)-1):
+        for i in range(len(self.p)-1):            
             (new_d, new_close_x, new_close_y) = p_dist(x, y, self.p[i,0], self.p[i,1], self.p[i+1,0], self.p[i+1,1])
             frac = self.reverse_interp(new_close_x, new_close_y)
             if new_d<d:
@@ -151,6 +156,8 @@ Used as a shortcut to store walks for the purpose of wifi recording
 def convert_points_to_np(nodes, points):
     whole_route = []
     for i in range(len(points)-1):
+        if i>0:
+            whole_route.pop()
         start = points[i]
         end = points[i+1]
         (dist, route) =  get_route(nodes, start, end)

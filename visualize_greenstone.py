@@ -79,7 +79,7 @@ def show(location_summaries, ap_names, ap_macs):
 
 if __name__ == "__main__":
     folder = "c:\\dev\\data"
-    (location_summaries, valid_macs) = process_android.read_summary(folder + "/" + "greenstone_summary_20160527_122425.txt")            
+    (location_summaries, valid_macs) = process_android.read_summary(folder + "/" + "greenstone_summary_20160605_082448.txt")            
     (ap_names, ap_macs) = process_android.get_macs(folder + "/" + "greenstone_macs.txt")
     show(location_summaries, ap_names, ap_macs)
     
