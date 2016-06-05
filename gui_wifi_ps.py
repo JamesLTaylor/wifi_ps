@@ -626,6 +626,8 @@ class WifiFrame(ttk.Frame):
             if distance<best_dist:
                 best_dist = distance
                 best_route = route
+                
+        route_finding.get_route_description(self.nodes, self.shops, best_route)
             
         for i in range(len(best_route)-1):
             if (self.level == self.nodes[best_route[i]]["level"] and

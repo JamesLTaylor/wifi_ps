@@ -1,8 +1,44 @@
 import json
 import numpy as np
+import math
+from operator import itemgetter
+
+"""
+distance between a point and a line segment
+
+http://stackoverflow.com/a/6853926/5890940   
+""" 
+def p_dist(x, y, x1, y1, x2, y2):
+
+  A = x - x1;
+  B = y - y1;
+  C = x2 - x1;
+  D = y2 - y1;
+
+  dot = A * C + B * D;
+  len_sq = C * C + D * D;
+  param = dot / len_sq;
+
+  if (param < 0):
+    xx = x1;
+    yy = y1;
+  
+  elif (param > 1):
+    xx = x2;
+    yy = y2;  
+  else:
+    xx = x1 + param * C;
+    yy = y1 + param * D;
+  
+
+  dx = x - xx;
+  dy = y - yy;
+  return (math.sqrt(dx * dx + dy * dy), xx, yy)
+
 
 class Path(object):
-    def __init__(self, path_data):
+    def __init__(self, path_data, px_per_m):
+        self.px_per_m = px_per_m
         self.p = np.array(path_data)
         self.len = np.sum(np.sqrt((self.p[1:,0]-self.p[:-1,0])**2 + (self.p[1:,1]-self.p[:-1,1])**2))
         self.cum_length = np.cumsum(np.append([0], np.sqrt((self.p[1:,0]-self.p[:-1,0])**2 + (self.p[1:,1]-self.p[:-1,1])**2)))
@@ -44,6 +80,18 @@ class Path(object):
                 
         frac = self.reverse_interp(close_x, close_y)
         return (d, frac)
+        
+    def get_reg_spaced(self, space):
+        l = self.len/self.px_per_m
+        n = np.round(l/space)
+        new_path = np.zeros((0,2))
+        for i in range(int(n)+1):
+            new_path = np.vstack((new_path, self.interp(i/n)))
+            
+        return new_path
+            
+        
+        
 
 def get_dist(a, b):
     dist = np.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2) + 100 * (a[2]-b[2])
@@ -128,16 +176,180 @@ def load_map():
     
     return nodes
     
+def get_closest_shop(shops, x, y, level, excluding=None):
+    best_dist = 1e9
+    for shop in shops:
+        if shop["level"]==level and not shop["name"]==excluding:
+            dist = get_dist([x,y,0], [shop["x"], shop["y"], 0])
+            if dist<best_dist:
+                best_dist = dist
+                return_shop = shop
+                
+    return return_shop
+    
+def get_route_shops(path, shops, level, shop_separation_px):
+    descriptions = []
+    for shop in shops:
+        if shop["level"]==level:            
+            (d, frac) = path.closest(shop["x"], shop["y"])
+            #print("{},{}".format(shop["name"], d))
+            if d<5*4.2:
+                descriptions.append([shop["name"],d, frac])
+                
+    descriptions = sorted(descriptions, key=itemgetter(2))
+    #print(descriptions)
+    route_shops = [descriptions[0]]
+    separation = shop_separation_px / path.len
+    for i in range(1,len(descriptions)):
+        if (descriptions[i][2]- route_shops[-1][2])>separation:
+            route_shops.append(descriptions[i])
+            
+    if not route_shops[-1][0]==descriptions[-1][0]:
+        #route_shops.pop()
+        route_shops.append(descriptions[-1])
+        
+        
+    return route_shops
+    
+def get_angle(x1, y1, x2, y2, x3, y3):
+    x1 -= x2
+    x3 -= x2
+    y1 -= y2
+    y3 -= y2    
+    l1 = math.sqrt(x1**2+y1**2)
+    l3 = math.sqrt(x3**2+y3**2)
+    x1 /= l1
+    y1 /= l1
+    x3 /= l3
+    y3 /= l3
+    
+    #theta1 = np.arccos((x1*x3) + (y1*y3))
+    theta = np.arctan2(y1,x1) - np.arctan2(y3,x3)
+    theta *= 180/np.pi
+    if theta>360:
+        theta-=360
+    elif theta<0:
+        theta+=360
+    return theta
+    
+def get_turns(path, new_path):
+    turns = []    
+    
+    # get angles
+    for i in range(1, len(new_path)-1):
+        theta = get_angle(new_path[i-1][0], new_path[i-1][1],
+                          new_path[i][0], new_path[i][1],
+                          new_path[i+1][0], new_path[i+1][1])
+    
+        #print(theta)
+    
+        if theta>210:
+            turns.append(["** HEAD  LEFT **", path.reverse_interp(new_path[i][0], new_path[i][1])])
+        if theta<150:
+            turns.append(["** HEAD  RIGHT **", path.reverse_interp(new_path[i][0], new_path[i][1])])
+        
+    return turns
+    
+    
+def get_route_description(nodes, shops, route):
+    px_p_m = 4.2
+    turn_spacing = 5.0
+    shop_spacing = 10.0
+
+    path_data1 = []
+    path_data2 = []
+    start_level = nodes[route[0]]["level"]
+    end_level = nodes[route[-1]]["level"]
+    for node in route:
+        if nodes[node]["level"]==start_level:
+            path_data1.append([nodes[node]["x"], nodes[node]["y"]])
+        else:
+            path_data2.append([nodes[node]["x"], nodes[node]["y"]])
+
+            
+    path = Path(path_data1, px_p_m)
+    new_path = path.get_reg_spaced(turn_spacing)
+    route_shops = get_route_shops(path, shops, start_level, px_p_m * shop_spacing)    
+    turns = get_turns(path, new_path)    
+    next_turn = 0
+    prev = 0
+    
+    for route_shop in route_shops:
+        if len(turns)>next_turn and turns[next_turn][1]<route_shop[2]:
+            d = int(5 * np.round(0.2*(turns[next_turn][1]-prev)*path.len/px_p_m))
+            print(str(d) + "m")
+            print(turns[next_turn][0])
+            next_turn += 1
+        
+        d = int(5 * np.round(0.2*(route_shop[2]-prev)*path.len/px_p_m))
+        prev = route_shop[2]
+        print(str(d) + "m to: " + route_shop[0])
+        
+    if len(path_data2)>0:        
+        d = int(5 * np.round(0.2*(1-prev)*path.len/px_p_m))
+        print(str(d) + "m to: escalator")
+            
+        if start_level==0:
+            print("** HEAD UP THE ESCALATOR **")
+        else: 
+            print("** HEAD DOWN THE ESCALATOR **")
+        prev = 0.0
+        path = Path(path_data2, px_p_m)
+        new_path = path.get_reg_spaced(turn_spacing)
+        route_shops = get_route_shops(path, shops, end_level, px_p_m * shop_spacing)    
+        turns = get_turns(path, new_path)    
+        next_turn = 0
+        
+        for route_shop in route_shops:
+            if len(turns)>next_turn and turns[next_turn][1]<route_shop[2]:
+                d = int(5 * np.round(0.2*(turns[next_turn][1]-prev)*path.len/px_p_m))
+                print(str(d) + "m")
+                print(turns[next_turn][0])
+                next_turn += 1
+            
+            d = int(5 * np.round(0.2*(route_shop[2]-prev)*path.len/px_p_m))
+            prev = route_shop[2]
+            print(str(d) + "m to: " + route_shop[0])
+            
+            
+            
+    d = int(5 * np.round(0.2*(1-prev)*path.len/px_p_m))
+    print(str(d) + "m to: destination")
+    
+    
 
 if __name__ == "__main__":    
 
-    start = [647.0,381.0,1]
-    end = [896.0,511.0,1]
+    #Game FoodCo,L008,,362.0,270.0,0
+    #Bread Basket,L077,,1638.0,433.0,0
+    start = [1638.0,433.0,0]
+    #Sportscene,U040,,1245.0,609.0,1
+    #Volpes The Linen Company,L089/90,,1348.0,379.0,0
+    end = [493.0,791.0,1]
+    #Jimmy Jungles,U115E,,493.0,791.0,1
+    #ABSA - Branch,L065,,1781.0,251.0,0    
+    #Cape Town Fish Market,L105,,958.0,529.0,0
+    #Mr Price Sport,U066,,1650.0,416.0,1
     
     nodes = load_map()
     shops = load_shops()
+    (dist, route) = get_route(nodes, start, end)
+    get_route_description(nodes, shops, route)
     
-    route = get_route(nodes, start, end)
+            
+        
+        
+
+    
+
+    
+                
+                #print("{},{},{}".format(shop["name"],d, frac))
+    
+    #shop1 = get_closest_shop(shops, new_path[0,0], new_path[0,1], start_level)
+    #shop2 = get_closest_shop(shops, new_path[1,0], new_path[1,1], start_level, excluding = shop1["name"])
+    
+    
     
 
     
