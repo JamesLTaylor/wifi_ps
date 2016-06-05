@@ -9,6 +9,9 @@ import json
 import copy
 import route_finding
 
+sys.path.append(".\\mall_data")
+import path_source
+
 class WifiFrame(ttk.Frame):
     
     FOREGROUND_TAG = "FOREGROUND_TAG"
@@ -20,6 +23,7 @@ class WifiFrame(ttk.Frame):
         self.set_constants()
         self.load_map()
         self.load_shops()
+        self.load_paths()
         self.setup()
         root.grid_columnconfigure(0,weight=1)        
         root.grid_rowconfigure(0,weight=1)
@@ -73,6 +77,20 @@ class WifiFrame(ttk.Frame):
         self.shop_var.set(values[0])
         self.shop_option = tk.OptionMenu(top_frame, self.shop_var, *values)
         self.shop_option.grid(row = 0, column=3, padx=5, pady=10, sticky=tk.W)
+        
+        self.path_var = tk.StringVar(top_frame)
+        values = self.paths.keys()        
+        self.path_var.set(values[0])
+        self.path_option = tk.OptionMenu(top_frame, self.path_var, *values)
+        self.path_option.grid(row = 0, column=4, padx=5, pady=10, sticky=tk.W)
+        self.path_var.trace("w", self.path_change)
+        
+        self.path_new_var = tk.StringVar(top_frame)
+        values = self.paths_new.keys()        
+        self.path_new_var.set(values[0])
+        self.path_new_option = tk.OptionMenu(top_frame, self.path_new_var, *values)
+        self.path_new_option.grid(row = 0, column=5, padx=5, pady=10, sticky=tk.W)
+        self.path_new_var.trace("w", self.path_new_change)
         
         # Canvas frame
         canvas_frame = tk.Frame(self)
@@ -158,7 +176,32 @@ class WifiFrame(ttk.Frame):
         
     def level_change(self, *args):
         self.set_new_image()
+        
 
+    def path_change(self, *args):
+        path = self.paths[self.path_var.get()]
+        
+        for i in range(len(path)-1):
+           # if (self.level == self.nodes[best_route[i]]["level"] and
+           #     self.level == self.nodes[best_route[i+1]]["level"]):
+                       
+           self.canvas.create_line(path[i][0],  path[i][1], 
+                                   path[i+1][0],  path[i+1][1],                                        
+                                   width=3, tag=WifiFrame.FOREGROUND_TAG, fill="blue")
+                                   
+    def path_new_change(self, *args):
+        points = self.paths_new[self.path_new_var.get()]
+        path = route_finding.convert_points_to_np(self.nodes, points)
+        
+
+        for i in range(len(path)-1):
+           # if (self.level == self.nodes[best_route[i]]["level"] and
+           #     self.level == self.nodes[best_route[i+1]]["level"]):
+                       
+           self.canvas.create_line(path[i][0],  path[i][1], 
+                                   path[i+1][0],  path[i+1][1],                                        
+                                   width=3, tag=WifiFrame.FOREGROUND_TAG, fill="green")        
+        
         
             
         
@@ -637,6 +680,9 @@ class WifiFrame(ttk.Frame):
                                         self.nodes[best_route[i+1]]["x"], self.nodes[best_route[i+1]]["y"], 
                                         width=3, tag=WifiFrame.FOREGROUND_TAG, fill="red")
         
+    def load_paths(self):
+        self.paths = path_source.greenstone()
+        self.paths_new = path_source.greenstone_new()
         
 
                 

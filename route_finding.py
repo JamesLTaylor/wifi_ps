@@ -143,6 +143,27 @@ def get_route(nodes, start, end):
         vertex_set.remove(current)    
         
     return (nodes[end_ind]["dist"], nodes[end_ind]["route"])
+    
+    
+""" Converts a list of points to a numpy array of the connecting path
+Used as a shortcut to store walks for the purpose of wifi recording
+"""    
+def convert_points_to_np(nodes, points):
+    whole_route = []
+    for i in range(len(points)-1):
+        start = points[i]
+        end = points[i+1]
+        (dist, route) =  get_route(nodes, start, end)
+        whole_route += route
+        
+        arr = np.zeros((0,2))
+        
+    for i in range(len(whole_route)):
+        if not nodes[whole_route[i]]["level"] == nodes[whole_route[0]]["level"]:
+            raise Exception("whole route must be on a single level")                
+        arr = np.vstack((arr, [nodes[whole_route[i]]["x"],  nodes[whole_route[i]]["y"]]))
+    
+    return arr
 
 
 def load_shops():
@@ -303,8 +324,7 @@ def get_route_description(nodes, shops, route):
         for route_shop in route_shops:
             if len(turns)>next_turn and turns[next_turn][1]<route_shop[2]:
                 d = int(5 * np.round(0.2*(turns[next_turn][1]-prev)*path.len/px_p_m))
-                print(str(d) + "m")
-                print(turns[next_turn][0])
+                print(str(d) + "m then: " + turns[next_turn][0])                
                 next_turn += 1
             
             d = int(5 * np.round(0.2*(route_shop[2]-prev)*path.len/px_p_m))
